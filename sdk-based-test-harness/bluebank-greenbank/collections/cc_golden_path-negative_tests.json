@@ -713,6 +713,129 @@
         },
         {
           "id": 8,
+          "description": "Reserve funds for abort test",
+          "apiVersion": {
+            "minorVersion": 1,
+            "majorVersion": 2,
+            "type": "sdk-scheme-adapter-backend-v2_1_0-openapi3-snippets",
+            "asynchronous": false,
+            "prefix": "/backend",
+            "specFile": "spec_files/api_definitions/sdk-scheme-adapter-backend-v2_1_0-openapi3-snippets_2.1/api_spec.yaml",
+            "callbackMapFile": "spec_files/api_definitions/sdk-scheme-adapter-backend-v2_1_0-openapi3-snippets_2.1/callback_map.json",
+            "responseMapFile": "spec_files/api_definitions/sdk-scheme-adapter-backend-v2_1_0-openapi3-snippets_2.1/response_map.json",
+            "jsfRefFile": "spec_files/api_definitions/sdk-scheme-adapter-backend-v2_1_0-openapi3-snippets_2.1/mockRef.json",
+            "triggerTemplatesFolder": "spec_files/api_definitions/sdk-scheme-adapter-backend-v2_1_0-openapi3-snippets_2.1/trigger_templates"
+          },
+          "operationPath": "/transfers",
+          "path": "/transfers",
+          "method": "post",
+          "url": "{$inputs.cc_incoming_url}",
+          "body": {
+            "transferId": "{$function.generic.generateUUID}",
+            "amount": "{$inputs.payeeAmount}",
+            "amountType": "SEND",
+            "currency": "{$inputs.incomingCurrency}",
+            "from": {
+              "idType": "MSISDN",
+              "idValue": "777123456"
+            },
+            "to": {
+              "idType": "{$inputs.payeeIdType}",
+              "idValue": "{$inputs.payeeIdToSend}"
+            },
+            "ilpPacket": {
+              "data": {
+                "amount": {
+                  "amount": "{$inputs.payeeAmount}",
+                  "currency": "{$inputs.incomingCurrency}"
+                },
+                "payee": {
+                  "partyIdInfo": {
+                    "partyIdType": "{$inputs.payeeIdType}",
+                    "partyIdentifier": "{$inputs.payeeIdToSend}",
+                    "fspId": "bluebank"
+                  },
+                  "merchantClassificationCode": "1234",
+                  "name": "Payee Name",
+                  "personalInfo": {
+                    "complexName": {
+                      "firstName": "PayeeFirstName",
+                      "lastName": "PayeeLastName"
+                    },
+                    "dateOfBirth": "2001-08-21"
+                  },
+                  "supportedCurrencies": [
+                    "{$inputs.incomingCurrency}"
+                  ]
+                },
+                "payer": {
+                  "partyIdInfo": {
+                    "partyIdType": "MSISDN",
+                    "partyIdentifier": "777123456",
+                    "fspId": "greenbank"
+                  },
+                  "merchantClassificationCode": "1234",
+                  "name": "Payer Name",
+                  "personalInfo": {
+                    "complexName": {
+                      "firstName": "PayerFirstName",
+                      "lastName": "PayerLastName"
+                    },
+                    "dateOfBirth": "2001-08-21"
+                  },
+                  "supportedCurrencies": [
+                    "{$inputs.incomingCurrency}"
+                  ]
+                },
+                "quoteId": "{$function.generic.generateUUID}",
+                "transactionId": "{$function.generic.generateUUID}",
+                "transactionType": {
+                  "initiator": "PAYER",
+                  "initiatorType": "CONSUMER",
+                  "scenario": "TRANSFER",
+                  "subScenario": "LOCALLY_DEFINED_SUBSCENARIO"
+                }
+              }
+            },
+            "transactionType": "TRANSFER",
+            "quote": {
+              "expiration": "2024-10-15T13:17:57.742Z",
+              "quoteId": "{$function.generic.generateUUID}",
+              "transactionId": "{$function.generic.generateUUID}",
+              "payeeFspCommissionAmount": "0",
+              "payeeFspCommissionAmountCurrency": "{$inputs.incomingCurrency}",
+              "payeeFspFeeAmount": "0",
+              "payeeFspFeeAmountCurrency": "{$inputs.incomingCurrency}",
+              "payeeReceiveAmount": "{$inputs.payeeAmount}",
+              "payeeReceiveAmountCurrency": "{$inputs.incomingCurrency}",
+              "transferAmount": "{$inputs.payeeAmount}",
+              "transferAmountCurrency": "{$inputs.incomingCurrency}"
+            },
+            "note": "Reserve for abort test"
+          },
+          "tests": {
+            "assertions": [
+              {
+                "id": 1,
+                "description": "Check response status code is 200",
+                "exec": [
+                  "expect(response.status).to.equal(200)"
+                ]
+              }
+            ]
+          },
+          "disabled": false,
+          "scriptingEngine": "javascript",
+          "scripts": {
+            "postRequest": {
+              "exec": [
+                "environment.abortTransferId = requestBody.transferId"
+              ]
+            }
+          }
+        },
+        {
+          "id": 9,
           "description": "Aborting a Transfer Request Test",
           "apiVersion": {
             "minorVersion": 1,
@@ -727,12 +850,12 @@
             "triggerTemplatesFolder": "spec_files/api_definitions/sdk-scheme-adapter-backend-v2_1_0-openapi3-snippets_2.1/trigger_templates"
           },
           "operationPath": "/transfers/{transferId}",
-          "path": "/transfers/{transferId}",
+          "path": "/transfers/{$prev.8.request.body.transferId}",
           "method": "put",
           "params": {
-            "transferId": ""
+            "transferId": "{$prev.8.request.body.transferId}"
           },
-          "url": "http://{$environment.connectorHost}:3003",
+          "url": "{$inputs.cc_incoming_url}",
           "tests": {
             "assertions": [
               {
@@ -744,7 +867,7 @@
               },
               {
                 "id": 2,
-                "description": "Check if response message is equal to ERROR_OCCURRED",
+                "description": "Check if response message is equal to Transfer Not Completed Error",
                 "exec": [
                   "expect(response.body.message).to.equal(\"Transfer Not Completed Error\")"
                 ]
@@ -753,27 +876,30 @@
           },
           "body": {
             "currentState": "ERROR_OCCURRED",
-            "transferId": "{$function.generic.generateUUID}",
+            "transferId": "{$prev.8.request.body.transferId}",
+            "lastError": {
+              "httpStatusCode": 500
+            },
             "quoteRequest": {
               "body": {
                 "quoteId": "{$function.generic.generateUUID}",
                 "transactionId": "{$function.generic.generateUUID}",
                 "payee": {
                   "partyIdInfo": {
-                    "partyIdType": "{$environment.payeeIdType}",
-                    "partyIdentifier": "{$environment.payeeId}"
+                    "partyIdType": "MSISDN",
+                    "partyIdentifier": "260970000000"
                   }
                 },
                 "payer": {
                   "partyIdInfo": {
                     "partyIdType": "MSISDN",
-                    "partyIdentifier": "{$environment.payerId}"
+                    "partyIdentifier": "971938765"
                   }
                 },
                 "amountType": "SEND",
                 "amount": {
-                  "currency": "{$environment.receiveCurrency}",
-                  "amount": "{$environment.payeeAmount}"
+                  "currency": "ZMW",
+                  "amount": "400"
                 },
                 "transactionType": {
                   "scenario": "DEPOSIT",
@@ -943,15 +1069,7 @@
             "homeTransactionId": "{$prev.1.request.body.homeTransactionId}"
           },
           "tests": {
-            "assertions": [
-              {
-                "id": 1,
-                "description": "Check response status code is 500",
-                "exec": [
-                  "expect(response.status).to.equal(500)"
-                ]
-              }
-            ]
+            "assertions": []
           },
           "disabled": false
         },
@@ -1097,15 +1215,7 @@
             "homeTransactionId": "{$prev.1.request.body.homeTransactionId}"
           },
           "tests": {
-            "assertions": [
-              {
-                "id": 1,
-                "description": "Check response status code is 500",
-                "exec": [
-                  "expect(response.status).to.equal(500)"
-                ]
-              }
-            ]
+            "assertions": []
           },
           "disabled": false
         },
