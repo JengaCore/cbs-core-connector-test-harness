@@ -193,12 +193,12 @@ services:
     profiles:
       - debug
 
-  dfsp-api:
-    extends:
-      file: core-connector.yaml
-      service: dfsp-api
-    networks:
-      - mojaloop-net
+  # dfsp-api:
+  #   extends:
+  #     file: core-connector.yaml
+  #     service: dfsp-api
+  #   networks:
+  #     - mojaloop-net
       
   core-connector1:
     extends:
@@ -213,7 +213,7 @@ services:
       # === Server Settings ===
       SDK_SERVER_HOST: 0.0.0.0
       SDK_SERVER_PORT: 3003
-      CBS_NAME: tnm-mw-dfsp-cc
+      CBS_NAME: greenbank-zmw-dfsp-cc
       DFSP_SERVER_HOST: 0.0.0.0
       DFSP_SERVER_PORT: 3004
       DFSP_API_SPEC: ./src/api-spec/send-money-api.yaml
@@ -224,15 +224,15 @@ services:
       SDK_BASE_URL: http://dfsp1-sdk-api-svc:4001
 
       # === CBS Settings ===
-      FSP_ID: bluebank
+      FSP_ID: greenbank
       LEI: 1234567890ABCDEFGHIJK
-      CURRENCY: GMD
+      CURRENCY: ZMW
       SUPPORTED_ID_TYPE: MSISDN
 
       # === CBS Config Settings ===
-      BLUE_BANK_URL: https://api.bluebank.mw
-      BLUE_BANK_CLIENT_ID: my-bluebank-client-id
-      BLUE_BANK_CLIENT_SECRET: my-bluebank-client-secret
+      GREEN_BANK_URL: https://api.bluebank.mw
+      GREEN_BANK_CLIENT_ID: my-bluebank-client-id
+      GREEN_BANK_CLIENT_SECRET: my-bluebank-client-secret
       CURRENCY_MODE: single
     ports:
       - "13005:3003"

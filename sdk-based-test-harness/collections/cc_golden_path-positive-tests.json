@@ -563,19 +563,19 @@
             "triggerTemplatesFolder": "spec_files/api_definitions/sdk-scheme-adapter-backend-v2_1_0-openapi3-snippets_2.1/trigger_templates"
           },
           "operationPath": "/transfers/{transferId}",
-          "path": "/transfers/f7fbf391-c29b-4534-bc86-1892568f7ad8",
+          "path": "/transfers/{$prev.3.request.body.transferId}",
           "method": "put",
           "params": {
-            "transferId": "f7fbf391-c29b-4534-bc86-1892568f7ad8"
+            "transferId": "{$prev.3.request.body.transferId}"
           },
           "url": "{$inputs.cc_incoming_url}",
           "body": {
             "currentState": "COMPLETED",
-            "homeTransactionId": "{$prev.3.response.body.homeTransactionId}",
-            "transferId": "{$function.generic.generateUUID}",
+            "homeTransactionId": "{$prev.3.request.body.transferId}",
+            "transferId": "{$prev.3.request.body.transferId}",
             "prepare": {
               "body": {
-                "transferId": "{$function.generic.generateUUID}",
+                "transferId": "{$prev.3.request.body.transferId}",
                 "payeeFsp": "string",
                 "payerFsp": "string",
                 "amount": {
