@@ -68,11 +68,11 @@ A call with a missing or malformed required header is rejected.
 
 ### 3.4 Identifiers
 
-Quote ids, transfer ids and message ids are correlation ids: a lowercase UUID (versions 1 to 5) or an uppercase ULID. They must be unique. Reusing a transfer id is treated as a repeat of the same transfer (see [section 10](#10-repeats-and-recovery)).
+In an ISO message the identifiers in the body (`TxId`, `EndToEndId`, `InstrId`) must be an uppercase ULID: 26 characters matching `^[0-9A-HJKMNP-TV-Z]{26}$`. The `{ID}` in a path is a correlation id: an uppercase ULID or a lowercase UUID (versions 1 to 5). Use the ULID for a quote or transfer so that the path id and the body id are the same value. Identifiers must be unique. Reusing a transfer id is treated as a repeat of the same transfer (see [section 10](#10-repeats-and-recovery)).
 
 ### 3.5 Message contents
 
-Each message below lists the fields the hub reads. The OpenAPI schema is the full contract and lists every required element. Validate your messages against it before sending. The ISO messages also carry the DFSP ids in their bodies, and the hub maps them to the `FSPIOP-Source` and `FSPIOP-Destination` headers. Keep body and headers consistent.
+Each message below links to the API viewer, where its real payload can be seen, and to its definition in the combined API. [field-reference.md](field-reference.md) lists every element of every message, with its type, whether it is required, its constraints and its meaning, and gives the fields the hub reads and how it reads them. Validate your messages against the OpenAPI schema before sending. The ISO messages also carry the DFSP ids in their bodies, and the hub maps them to the `FSPIOP-Source` and `FSPIOP-Destination` headers. Keep body and headers consistent.
 
 ## 4. Party lookup
 
@@ -84,6 +84,7 @@ Each message below lists the fields the hub reads. The OpenAPI schema is the ful
 | Call | `GET /parties/{Type}/{ID}`, or `GET /parties/{Type}/{ID}/{SubId}` |
 | Body | None |
 | Answer | `202` |
+| Payload | [API viewer](https://mojaloop.github.io/api-snippets/?urls.primaryName=v2.0_ISO20022#/parties/PartiesByTypeAndID) · [definition, line 699](https://github.com/JengaCore/cbs-core-connector-test-harness/blob/932dd41cca79c385ef5ab00caef1977edf1f46e8/sdk-based-test-harness/config/ttk-hub/spec_files/api_definitions/fspiop_2.0_iso20022/api_spec.yaml#L699) (with sub id: [API viewer](https://mojaloop.github.io/api-snippets/?urls.primaryName=v2.0_ISO20022#/parties/PartiesSubIdByTypeAndID) · [definition, line 832](https://github.com/JengaCore/cbs-core-connector-test-harness/blob/932dd41cca79c385ef5ab00caef1977edf1f46e8/sdk-based-test-harness/config/ttk-hub/spec_files/api_definitions/fspiop_2.0_iso20022/api_spec.yaml#L832)) |
 
 `{Type}` is the identifier type (for example `MSISDN`, `ACCOUNT_ID`) and `{ID}` its value.
 
@@ -97,23 +98,16 @@ The hub uses a static oracle: customers are not registered in an account lookup.
 | Call | `PUT /parties/{Type}/{ID}` (or with `/{SubId}`) |
 | Schema | `GetParties_IdentificationVerificationReportV03` |
 | Answer | `200` |
+| Payload | [API viewer](https://mojaloop.github.io/api-snippets/?urls.primaryName=v2.0_ISO20022#/parties/PartiesByTypeAndID2) · [definition, line 731](https://github.com/JengaCore/cbs-core-connector-test-harness/blob/932dd41cca79c385ef5ab00caef1977edf1f46e8/sdk-based-test-harness/config/ttk-hub/spec_files/api_definitions/fspiop_2.0_iso20022/api_spec.yaml#L731) (with sub id: [API viewer](https://mojaloop.github.io/api-snippets/?urls.primaryName=v2.0_ISO20022#/parties/PartiesSubIdByTypeAndIDPut) · [definition, line 864](https://github.com/JengaCore/cbs-core-connector-test-harness/blob/932dd41cca79c385ef5ab00caef1977edf1f46e8/sdk-based-test-harness/config/ttk-hub/spec_files/api_definitions/fspiop_2.0_iso20022/api_spec.yaml#L864)) |
+| Fields | [every element](field-reference.md#put-partiestypeid) |
 
-| Field | Meaning |
-|---|---|
-| `Assgnmt.MsgId`, `Assgnmt.CreDtTm` | Message id and creation time |
-| `Assgnmt.Assgnr.Agt.FinInstnId.Othr.Id` | Sender: the payee DFSP id |
-| `Assgnmt.Assgne.Agt.FinInstnId.Othr.Id` | Recipient: the payer DFSP id |
-| `Rpt.OrgnlId` | Identifier of the original request |
-| `Rpt.Vrfctn` | `true` when the party was found |
-| `Rpt.UpdtdPtyAndAcctId.Pty.Nm` | The party's name |
-| `Rpt.UpdtdPtyAndAcctId.Pty.Id.PrvtId.Othr.Id` | Identifier value, for a person |
-| `Rpt.UpdtdPtyAndAcctId.Pty.Id.PrvtId.Othr.SchmeNm.Prtry` | Identifier type, for a person |
-| `Rpt.UpdtdPtyAndAcctId.Pty.Id.OrgId.Othr.Id` and `…SchmeNm.Prtry` | The same two fields, for a business |
-| `Rpt.UpdtdPtyAndAcctId.Agt.FinInstnId.Othr.Id` | The payee DFSP id |
-| `Rpt.UpdtdPtyAndAcctId.Agt.FinInstnId.ClrSysMmbId.MmbId` | The sub id, if any |
-| `Rpt.UpdtdPtyAndAcctId.Acct.Ccy` | The currency (currencies) the party can receive |
+Rules:
 
-The party's name field is `Nm`. The sample callbacks bundled with the Testing Toolkit use `Name`, which does not match the hub's contract.
+- The sender, the payee DFSP, goes in `Assgnmt.Assgnr.Agt.FinInstnId.Othr.Id`. The recipient, the payer DFSP, goes in `Assgnmt.Assgne.Agt.FinInstnId.Othr.Id`. The hub reads them as `FSPIOP-Source` and `FSPIOP-Destination`.
+- `Rpt.Vrfctn` is `true` when the party was found.
+- The party's name is the single field `Rpt.UpdtdPtyAndAcctId.Pty.Nm`. The hub derives the display name and the first, middle and last names from it. The Testing Toolkit's bundled sample callbacks use `Name`, which does not match the hub's contract.
+- The identifier is under `Pty.Id.PrvtId` for a person or `Pty.Id.OrgId` for a business. `Othr.Id` is its value and `Othr.SchmeNm.Prtry` its type.
+- `Rpt.UpdtdPtyAndAcctId.Agt.FinInstnId.Othr.Id` is the payee DFSP id. `…ClrSysMmbId.MmbId` is the sub id. `Acct.Ccy` is the currency or currencies the party can receive.
 
 ### 4.3 Error
 
@@ -122,9 +116,11 @@ The party's name field is `Nm`. The sample callbacks bundled with the Testing To
 | Sent by | Payee DFSP, to the hub |
 | Call | `PUT /parties/{Type}/{ID}/error` (or with `/{SubId}`) |
 | Schema | `GetPartiesError_IdentificationVerificationReportV03` |
-| Fields | `Rpt.Rsn.Cd` is the error code. `Assgnmt` carries the DFSP ids as in 4.2 |
+| Answer | `200` |
+| Payload | [API viewer](https://mojaloop.github.io/api-snippets/?urls.primaryName=v2.0_ISO20022#/parties/PartiesErrorByTypeAndID) · [definition, line 769](https://github.com/JengaCore/cbs-core-connector-test-harness/blob/932dd41cca79c385ef5ab00caef1977edf1f46e8/sdk-based-test-harness/config/ttk-hub/spec_files/api_definitions/fspiop_2.0_iso20022/api_spec.yaml#L769) (with sub id: [API viewer](https://mojaloop.github.io/api-snippets/?urls.primaryName=v2.0_ISO20022#/parties/PartiesSubIdErrorByTypeAndID) · [definition, line 902](https://github.com/JengaCore/cbs-core-connector-test-harness/blob/932dd41cca79c385ef5ab00caef1977edf1f46e8/sdk-based-test-harness/config/ttk-hub/spec_files/api_definitions/fspiop_2.0_iso20022/api_spec.yaml#L902)) |
+| Fields | [every element](field-reference.md#put-partiestypeiderror) |
 
-Use `3204` when the party does not exist, and `3100` for an unsupported identifier type. The full list is in [section 8](#8-error-codes).
+`Rpt.Rsn.Cd` is the error code. `Assgnmt` carries the DFSP ids as in 4.2. Use `3204` when the party does not exist, and `3100` for an unsupported identifier type. The full list is in [section 8](#8-error-codes).
 
 ## 5. Quote
 
@@ -135,17 +131,17 @@ Use `3204` when the party does not exist, and `3100` for an unsupported identifi
 | Sent by | Payer DFSP, to the hub. The hub forwards it to the payee DFSP, which answers `202` |
 | Call | `POST /quotes` |
 | Schema | `TermsRequest_FIToFICustomerCreditProposal` |
+| Answer | `202` |
+| Payload | [API viewer](https://mojaloop.github.io/api-snippets/?urls.primaryName=v2.0_ISO20022#/quotes/Quotes) · [definition, line 1134](https://github.com/JengaCore/cbs-core-connector-test-harness/blob/932dd41cca79c385ef5ab00caef1977edf1f46e8/sdk-based-test-harness/config/ttk-hub/spec_files/api_definitions/fspiop_2.0_iso20022/api_spec.yaml#L1134) |
+| Fields | [every element](field-reference.md#post-quotes) |
 
-| Field | Meaning |
-|---|---|
-| `GrpHdr.PmtInstrXpryDtTm` | When the quote request expires |
-| `CdtTrfTxInf.PmtId.TxId` | The quote id |
-| `CdtTrfTxInf.PmtId.EndToEndId` | The transaction id |
-| `CdtTrfTxInf.PmtId.InstrId` | The transaction request id, if any |
-| `CdtTrfTxInf.IntrBkSttlmAmt.Ccy` and `.ActiveCurrencyAndAmount` | Currency and amount |
-| `CdtTrfTxInf.Dbtr`, `.DbtrAgt` | The payer: identifier, name and DFSP |
-| `CdtTrfTxInf.Cdtr`, `.CdtrAgt` | The payee: identifier, name and DFSP |
-| `CdtTrfTxInf.Purp.Prtry` | The transaction scenario |
+Rules:
+
+- `GrpHdr.PmtInstrXpryDtTm` is when the quote request expires.
+- `CdtTrfTxInf.PmtId.TxId` is the quote id, `…EndToEndId` the transaction id and `…InstrId` the transaction request id if there is one. Each is an uppercase ULID (see [3.4](#34-identifiers)).
+- `CdtTrfTxInf.IntrBkSttlmAmt` is the amount and currency.
+- The payer is `CdtTrfTxInf.Dbtr` (identifier and name) and `CdtTrfTxInf.DbtrAgt` (DFSP). The payee is `CdtTrfTxInf.Cdtr` and `CdtTrfTxInf.CdtrAgt`. In each, the identifier is under `Id.PrvtId` (person) or `Id.OrgId` (business), the DFSP id is `FinInstnId.Othr.Id`, and the sub id is `FinInstnId.ClrSysMmbId.MmbId`.
+- `CdtTrfTxInf.Purp.Prtry` is the transaction scenario.
 
 ### 5.2 Response
 
@@ -155,17 +151,16 @@ Use `3204` when the party does not exist, and `3100` for an unsupported identifi
 | Call | `PUT /quotes/{ID}` |
 | Schema | `TermsResponse_FIToFICustomerCreditConfirmation` |
 | Answer | `200` |
+| Payload | [API viewer](https://mojaloop.github.io/api-snippets/?urls.primaryName=v2.0_ISO20022#/quotes/QuotesByID1) · [definition, line 1222](https://github.com/JengaCore/cbs-core-connector-test-harness/blob/932dd41cca79c385ef5ab00caef1977edf1f46e8/sdk-based-test-harness/config/ttk-hub/spec_files/api_definitions/fspiop_2.0_iso20022/api_spec.yaml#L1222) |
+| Fields | [every element](field-reference.md#put-quotesid) |
 
-| Field | Meaning |
-|---|---|
-| `GrpHdr.PmtInstrXpryDtTm` | When the quote expires |
-| `CdtTrfTxInf.IntrBkSttlmAmt` | The amount the payer's DFSP must transfer |
-| `CdtTrfTxInf.InstdAmt` | The amount the payee receives |
-| `CdtTrfTxInf.ChrgsInf.Amt` | The payee DFSP's fee |
-| `CdtTrfTxInf.VrfctnOfTerms.IlpV4PrepPacket` | The ILPv4 packet (see [section 6](#6-ilp-packet-condition-and-fulfilment)) |
-| `CdtTrfTxInf.PmtId.TxId` | The quote id, echoed |
+Rules:
 
-The hub takes the transfer condition from the ILP packet. You do not send a separate condition.
+- `GrpHdr.PmtInstrXpryDtTm` is when the quote expires.
+- `CdtTrfTxInf.IntrBkSttlmAmt` is the amount the payer's DFSP must transfer. `CdtTrfTxInf.InstdAmt` is the amount the payee receives. `CdtTrfTxInf.ChrgsInf.Amt` is the payee DFSP's fee.
+- `CdtTrfTxInf.VrfctnOfTerms.IlpV4PrepPacket` is the ILPv4 packet (see [section 6](#6-ilp-packet-condition-and-fulfilment)). The hub takes the transfer condition from it. You do not send a separate condition.
+- `CdtTrfTxInf.PmtId.TxId` is the quote id, echoed.
+- The hub derives `FSPIOP-Source` and `FSPIOP-Destination` from `CdtTrfTxInf.Cdtr.Id.OrgId.Othr.Id` and `CdtTrfTxInf.Dbtr.Id.OrgId.Othr.Id`. Set the headers and these elements consistently.
 
 ### 5.3 Error
 
@@ -174,13 +169,15 @@ The hub takes the transfer condition from the ILP packet. You do not send a sepa
 | Sent by | Payee DFSP, to the hub |
 | Call | `PUT /quotes/{ID}/error` |
 | Schema | `PacsError_FIToFIPaymentStatusReportV15` |
-| Fields | `TxInfAndSts.StsRsnInf.Rsn.Prtry` is the error code. `TxInfAndSts.StsRsnInf.AddtlInf` is a description |
+| Answer | `200` |
+| Payload | [API viewer](https://mojaloop.github.io/api-snippets/?urls.primaryName=v2.0_ISO20022#/quotes/QuotesByIDAndError) · [definition, line 1261](https://github.com/JengaCore/cbs-core-connector-test-harness/blob/932dd41cca79c385ef5ab00caef1977edf1f46e8/sdk-based-test-harness/config/ttk-hub/spec_files/api_definitions/fspiop_2.0_iso20022/api_spec.yaml#L1261) |
+| Fields | [every element](field-reference.md#put-quotesiderror) |
 
-Typical codes: `3100` invalid request, `3102` missing element, `5106` unsupported currency, `5200` limit exceeded, `5400` blocked party.
+`TxInfAndSts.StsRsnInf.Rsn.Prtry` is the error code and `TxInfAndSts.StsRsnInf.AddtlInf` a description. Typical codes: `3100` invalid request, `3102` missing element, `5106` unsupported currency, `5200` limit exceeded, `5400` blocked party.
 
 ### 5.4 Quote lookup
 
-`GET /quotes/{ID}` asks for a quote again. The hub forwards it to the payee DFSP, which answers `202` and sends the same `PUT /quotes/{ID}` as in 5.2.
+`GET /quotes/{ID}` asks for a quote again ([API viewer](https://mojaloop.github.io/api-snippets/?urls.primaryName=v2.0_ISO20022#/quotes/QuotesByID) · [definition, line 1192](https://github.com/JengaCore/cbs-core-connector-test-harness/blob/932dd41cca79c385ef5ab00caef1977edf1f46e8/sdk-based-test-harness/config/ttk-hub/spec_files/api_definitions/fspiop_2.0_iso20022/api_spec.yaml#L1192)). The hub forwards it to the payee DFSP, which answers `202` and sends the same `PUT /quotes/{ID}` as in 5.2.
 
 ### 5.5 Quote expiry
 
@@ -255,15 +252,17 @@ Source: [`errors.js`](https://github.com/mojaloop/central-services-error-handlin
 | Sent by | Payer DFSP, to the hub. The hub forwards it to the payee DFSP, which answers `202` |
 | Call | `POST /transfers` |
 | Schema | `Execute_FIToFICustomerCreditTransferV13` |
+| Answer | `202` |
+| Payload | [API viewer](https://mojaloop.github.io/api-snippets/?urls.primaryName=v2.0_ISO20022#/transfers/transfers) · [definition, line 1473](https://github.com/JengaCore/cbs-core-connector-test-harness/blob/932dd41cca79c385ef5ab00caef1977edf1f46e8/sdk-based-test-harness/config/ttk-hub/spec_files/api_definitions/fspiop_2.0_iso20022/api_spec.yaml#L1473) |
+| Fields | [every element](field-reference.md#post-transfers) |
 
-| Field | Meaning |
-|---|---|
-| `GrpHdr.PmtInstrXpryDtTm` | The transfer's expiry. Required, and must be in the future |
-| `CdtTrfTxInf.PmtId.TxId` | The transfer id. Unique |
-| `CdtTrfTxInf.DbtrAgt.FinInstnId.Othr.Id` | Payer DFSP id |
-| `CdtTrfTxInf.CdtrAgt.FinInstnId.Othr.Id` | Payee DFSP id |
-| `CdtTrfTxInf.IntrBkSttlmAmt.Ccy` and `.ActiveCurrencyAndAmount` | Currency and amount. Must equal the quote's transfer amount |
-| `CdtTrfTxInf.VrfctnOfTerms.IlpV4PrepPacket` | The packet from the quote response |
+Rules:
+
+- `GrpHdr.PmtInstrXpryDtTm` is the transfer's expiry. It is required, and must be in the future.
+- `CdtTrfTxInf.PmtId.TxId` is the transfer id. It is unique and an uppercase ULID.
+- `CdtTrfTxInf.DbtrAgt.FinInstnId.Othr.Id` is the payer DFSP id. `CdtTrfTxInf.CdtrAgt.FinInstnId.Othr.Id` is the payee DFSP id.
+- `CdtTrfTxInf.IntrBkSttlmAmt` is the currency and amount. It must equal the quote's transfer amount.
+- `CdtTrfTxInf.VrfctnOfTerms.IlpV4PrepPacket` is the packet from the quote response.
 
 The ledger rejects a transfer whose condition is missing or invalid, or whose expiry is missing or in the past.
 
@@ -275,15 +274,14 @@ The ledger rejects a transfer whose condition is missing or invalid, or whose ex
 | Call | `PUT /transfers/{ID}` |
 | Schema | `PacsStatus_FIToFIPaymentStatusReportV15` |
 | Answer | `200` |
+| Payload | [API viewer](https://mojaloop.github.io/api-snippets/?urls.primaryName=v2.0_ISO20022#/transfers/TransfersByIDPut) · [definition, line 1603](https://github.com/JengaCore/cbs-core-connector-test-harness/blob/932dd41cca79c385ef5ab00caef1977edf1f46e8/sdk-based-test-harness/config/ttk-hub/spec_files/api_definitions/fspiop_2.0_iso20022/api_spec.yaml#L1603) |
+| Fields | [every element](field-reference.md#put-transfersid) |
 
-| Field | Meaning |
-|---|---|
-| `TxInfAndSts.ExctnConf` | The fulfilment |
-| `TxInfAndSts.TxSts` | The state: `COMM` (committed) or `RESV` (reserved). With `RESV` the hub commits and sends the payee a commit notice |
-| `TxInfAndSts.PrcgDt.DtTm` | The time of completion |
+Rules:
 
-Rules the hub applies:
-
+- `TxInfAndSts.ExctnConf` is the fulfilment.
+- `TxInfAndSts.TxSts` is the state: `COMM` (committed) or `RESV` (reserved). With `RESV` the hub commits and sends the payee a commit notice.
+- `TxInfAndSts.PrcgDt.DtTm` is the time of completion.
 - `SHA-256(fulfilment)` must equal the transfer's condition.
 - `PrcgDt.DtTm` must not be more than 200 milliseconds in the future, and not more than 300 seconds in the past. Otherwise the hub rejects it with `3100`. Keep your clock synchronised.
 
@@ -297,6 +295,8 @@ The ISO states map as `COMM` committed, `RESV` reserved, `RECV` received and `AB
 | Call | `PATCH /transfers/{ID}` |
 | Schema | `PacsStatus_FIToFIPaymentStatusReportV15`, with `TxSts` `COMM`, `PrcgDt.DtTm`, and no fulfilment |
 | Answer | `200` |
+| Payload | [API viewer](https://mojaloop.github.io/api-snippets/?urls.primaryName=v2.0_ISO20022#/transfers/TransfersByIDPatch) · [definition, line 1563](https://github.com/JengaCore/cbs-core-connector-test-harness/blob/932dd41cca79c385ef5ab00caef1977edf1f46e8/sdk-based-test-harness/config/ttk-hub/spec_files/api_definitions/fspiop_2.0_iso20022/api_spec.yaml#L1563) |
+| Fields | [every element](field-reference.md#patch-transfersid) |
 
 The payee DFSP finalises the credit when it receives this.
 
@@ -307,6 +307,7 @@ The payee DFSP finalises the credit when it receives this.
 | Sent by | The hub, to the payer DFSP |
 | Call | `PUT /transfers/{ID}` |
 | Schema | `PacsStatus_FIToFIPaymentStatusReportV15`, with the fulfilment, `TxSts` and `PrcgDt.DtTm` |
+| Payload | As 9.2 |
 
 The payer DFSP finalises the debit. It should also check the fulfilment against the condition it sent.
 
@@ -314,12 +315,12 @@ The payer DFSP finalises the debit. It should also check the fulfilment against 
 
 | Event | Call | Who receives it |
 |---|---|---|
-| The payee rejects the transfer | `PUT /transfers/{ID}/error` from the payee to the hub (schema `PacsError_FIToFIPaymentStatusReportV15`, `StsRsnInf.Rsn.Prtry` is the code) | The hub aborts. The payer DFSP receives `PUT /transfers/{ID}/error` |
+| The payee rejects the transfer | `PUT /transfers/{ID}/error` from the payee to the hub. Schema `PacsError_FIToFIPaymentStatusReportV15`: `StsRsnInf.Rsn.Prtry` is the code ([API viewer](https://mojaloop.github.io/api-snippets/?urls.primaryName=v2.0_ISO20022#/transfers/TransfersByIDAndError) · [definition, line 1642](https://github.com/JengaCore/cbs-core-connector-test-harness/blob/932dd41cca79c385ef5ab00caef1977edf1f46e8/sdk-based-test-harness/config/ttk-hub/spec_files/api_definitions/fspiop_2.0_iso20022/api_spec.yaml#L1642) · [every element](field-reference.md#put-transfersiderror)) | The hub aborts. The payer DFSP receives `PUT /transfers/{ID}/error` |
 | The transfer expires | The hub's timeout handler aborts it. It runs every 15 seconds. It sends `PUT /transfers/{ID}/error` with code `3303` (transfer expired) | If the payee had not yet fulfilled, the payer DFSP only. If the payee had already fulfilled with `RESV`, both the payer and the payee DFSPs. Treat the transfer as failed and release funds |
 
 ### 9.6 Status
 
-The payer DFSP can ask for a transfer's state with `GET /transfers/{ID}` to the hub. The hub answers `202` and then sends `PUT /transfers/{ID}` with the state. The hub answers from its ledger. The payee DFSP is not asked.
+The payer DFSP can ask for a transfer's state with `GET /transfers/{ID}` to the hub ([API viewer](https://mojaloop.github.io/api-snippets/?urls.primaryName=v2.0_ISO20022#/transfers/TransfersByIDGet) · [definition, line 1532](https://github.com/JengaCore/cbs-core-connector-test-harness/blob/932dd41cca79c385ef5ab00caef1977edf1f46e8/sdk-based-test-harness/config/ttk-hub/spec_files/api_definitions/fspiop_2.0_iso20022/api_spec.yaml#L1532)). The hub answers `202` and then sends `PUT /transfers/{ID}` with the state. The hub answers from its ledger. The payee DFSP is not asked.
 
 ## 10. Repeats and recovery
 
@@ -338,7 +339,24 @@ For DFSPs:
 - Never refund a payment the hub reports as committed.
 - As payee, a repeated `POST /transfers` for a transfer you already handled must not credit twice.
 
-## 11. To confirm with the hub operator
+## 11. Resources in FSPIOP format
+
+The combined API keeps every resource that has no ISO 20022 representation in its FSPIOP format. Their payloads can be seen in the [FSPIOP API viewer](https://mojaloop.github.io/api-snippets/?urls.primaryName=v2.0). Their definitions in the combined API are:
+
+| Resource | Paths | Definition |
+|---|---|---|
+| Participants (oracle registration) | `/participants`, `/participants/{Type}/{ID}`, `/participants/{Type}/{ID}/{SubId}` | [line 589](https://github.com/JengaCore/cbs-core-connector-test-harness/blob/932dd41cca79c385ef5ab00caef1977edf1f46e8/sdk-based-test-harness/config/ttk-hub/spec_files/api_definitions/fspiop_2.0_iso20022/api_spec.yaml#L589) |
+| Transaction requests | `/transactionRequests`, `/transactionRequests/{ID}` | [line 952](https://github.com/JengaCore/cbs-core-connector-test-harness/blob/932dd41cca79c385ef5ab00caef1977edf1f46e8/sdk-based-test-harness/config/ttk-hub/spec_files/api_definitions/fspiop_2.0_iso20022/api_spec.yaml#L952) |
+| Authorizations | `/authorizations/{ID}` | [line 1310](https://github.com/JengaCore/cbs-core-connector-test-harness/blob/932dd41cca79c385ef5ab00caef1977edf1f46e8/sdk-based-test-harness/config/ttk-hub/spec_files/api_definitions/fspiop_2.0_iso20022/api_spec.yaml#L1310) |
+| Transactions | `/transactions/{ID}` | [line 1691](https://github.com/JengaCore/cbs-core-connector-test-harness/blob/932dd41cca79c385ef5ab00caef1977edf1f46e8/sdk-based-test-harness/config/ttk-hub/spec_files/api_definitions/fspiop_2.0_iso20022/api_spec.yaml#L1691) |
+| Bulk quotes | `/bulkQuotes`, `/bulkQuotes/{ID}` | [line 1821](https://github.com/JengaCore/cbs-core-connector-test-harness/blob/932dd41cca79c385ef5ab00caef1977edf1f46e8/sdk-based-test-harness/config/ttk-hub/spec_files/api_definitions/fspiop_2.0_iso20022/api_spec.yaml#L1821) |
+| Bulk transfers | `/bulkTransfers`, `/bulkTransfers/{ID}` | [line 1999](https://github.com/JengaCore/cbs-core-connector-test-harness/blob/932dd41cca79c385ef5ab00caef1977edf1f46e8/sdk-based-test-harness/config/ttk-hub/spec_files/api_definitions/fspiop_2.0_iso20022/api_spec.yaml#L1999) |
+| FX service discovery | `/services/FXP`, `/services/FXP/{SourceCurrency}/{TargetCurrency}` | [line 2576](https://github.com/JengaCore/cbs-core-connector-test-harness/blob/932dd41cca79c385ef5ab00caef1977edf1f46e8/sdk-based-test-harness/config/ttk-hub/spec_files/api_definitions/fspiop_2.0_iso20022/api_spec.yaml#L2576) |
+| Ping and interface | `/ping`, `/interface` | [line 37](https://github.com/JengaCore/cbs-core-connector-test-harness/blob/932dd41cca79c385ef5ab00caef1977edf1f46e8/sdk-based-test-harness/config/ttk-hub/spec_files/api_definitions/fspiop_2.0_iso20022/api_spec.yaml#L37) |
+
+None of the flows in this document uses them. The hub's oracle is static, so a DFSP does not register customers with `/participants`. Transaction requests, authorizations, transactions, bulk and FX service discovery are out of scope. `/ping` and `/interface` are in the combined API definition, but they are not in the contracts of the hub's lookup, quoting and transfer services.
+
+## 12. To confirm with the hub operator
 
 These could not be settled from the source and must be confirmed before go-live:
 
@@ -346,12 +364,15 @@ These could not be settled from the source and must be confirmed before go-live:
 - How the ISO quote expresses whether the amount is a send amount or a receive amount.
 - Which identifier types are enabled and how they route to your DFSP.
 - The versions of the hub services that are running.
+- The content type the hub expects for `participants` in ISO mode. The hub's code applies the ISO pattern to it. It does not matter while lookups use the static oracle.
 
-## 12. Sources
+## 13. Sources
 
+- Every element of every message, generated from the API definition: [field-reference.md](field-reference.md)
+- ISO 20022 payloads in the [API viewer](https://mojaloop.github.io/api-snippets/?urls.primaryName=v2.0_ISO20022); FSPIOP payloads in the [FSPIOP API viewer](https://mojaloop.github.io/api-snippets/?urls.primaryName=v2.0)
+- The combined API definition: [api_spec.yaml](https://github.com/JengaCore/cbs-core-connector-test-harness/blob/932dd41cca79c385ef5ab00caef1977edf1f46e8/sdk-based-test-harness/config/ttk-hub/spec_files/api_definitions/fspiop_2.0_iso20022/api_spec.yaml)
 - Hub ISO contracts: [parties](https://github.com/mojaloop/account-lookup-service/blob/v17.15.2/src/interface/api-swagger-iso20022-parties.yaml), [quotes](https://github.com/mojaloop/quoting-service/blob/v17.14.4/src/interface/QuotingService-swagger_iso20022.yaml), [transfers](https://github.com/mojaloop/ml-api-adapter/blob/v16.9.2/src/interface/api-swagger-iso20022-transfers.yaml)
 - Field mapping: [discovery](https://github.com/mojaloop/ml-schema-transformer-lib/blob/v2.9.0/src/mappings/fspiopiso20022/discovery.ts), [quotes](https://github.com/mojaloop/ml-schema-transformer-lib/blob/v2.9.0/src/mappings/fspiopiso20022/quotes.ts), [transfers](https://github.com/mojaloop/ml-schema-transformer-lib/blob/v2.9.0/src/mappings/fspiopiso20022/transfers.ts)
 - Ledger validation: [`validator.js`](https://github.com/mojaloop/central-ledger/blob/v19.14.0/src/handlers/transfers/validator.js), duplicates in [`prepare.js`](https://github.com/mojaloop/central-ledger/blob/v19.14.0/src/handlers/transfers/prepare.js)
 - Fulfil timing: [`validator.js`](https://github.com/mojaloop/ml-api-adapter/blob/v16.9.2/src/lib/validator.js); commit notice: [`notification/index.js`](https://github.com/mojaloop/ml-api-adapter/blob/v16.9.2/src/handlers/notification/index.js)
 - Generic transaction patterns: [Generic-Transaction-Patterns.md](https://github.com/mojaloop/mojaloop-specification/blob/master/fspiop-api/documents/Generic-Transaction-Patterns.md)
-- Combined API definition: [api_spec.yaml](https://github.com/JengaCore/cbs-core-connector-test-harness/blob/main/sdk-based-test-harness/config/ttk-hub/spec_files/api_definitions/fspiop_2.0_iso20022/api_spec.yaml)

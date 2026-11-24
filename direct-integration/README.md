@@ -9,19 +9,37 @@ The hub's API is ISO 20022 for party lookup, quotes and transfers. Other resourc
 | File | Purpose |
 |---|---|
 | [onboarding.md](onboarding.md) | The certificates and keys to create, the MCM calls to make, and the hub operator's steps |
-| [clearing-behaviour.md](clearing-behaviour.md) | How a payment clears, and every message: API path, schema, fields and rules |
+| [clearing-behaviour.md](clearing-behaviour.md) | How a payment clears, and every message: API path, schema, links to the real payloads, and the rules |
+| [field-reference.md](field-reference.md) | Every element of every ISO 20022 message, and how the hub reads it. Generated from the API definition |
 | [hub-requests.md](hub-requests.md) | What to ask the hub operator for, and what the hub operator does |
 | [register.md](register.md) | The test cases, how each is checked, and the behaviour it covers |
 | [evidence/evidence-pack.md](evidence/evidence-pack.md) | The template for recording a run |
+| [tools/generate_field_reference.py](tools/generate_field_reference.py) | Regenerates `field-reference.md` |
 
 ## Using these resources
 
 1. Send the first table in [hub-requests.md](hub-requests.md) to the hub operator.
 2. Implement onboarding as described in [onboarding.md](onboarding.md), and check each step.
-3. Implement the message handling in [clearing-behaviour.md](clearing-behaviour.md).
+3. Implement the message handling in [clearing-behaviour.md](clearing-behaviour.md). Use the API viewer links in it to see real payloads, and [field-reference.md](field-reference.md) for every element.
 4. When the hub operator confirms the participant is ready, run the cases in [register.md](register.md) against the test environment.
 5. Record each result, with the evidence the register names, in the evidence pack.
 6. Repeat on production after the test environment passes.
+
+## Regenerating the field reference
+
+`field-reference.md` is generated and must not be edited by hand. To regenerate it, for example after the API definition changes:
+
+```sh
+pip install pyyaml
+git clone --branch v2.9.0 https://github.com/mojaloop/ml-schema-transformer-lib
+python3 tools/generate_field_reference.py \
+  --spec ../sdk-based-test-harness/config/ttk-hub/spec_files/api_definitions/fspiop_2.0_iso20022/api_spec.yaml \
+  --mappings ml-schema-transformer-lib/src/mappings/fspiopiso20022 \
+  --spec-url https://github.com/JengaCore/cbs-core-connector-test-harness/blob/<commit>/sdk-based-test-harness/config/ttk-hub/spec_files/api_definitions/fspiop_2.0_iso20022/api_spec.yaml \
+  --out field-reference.md
+```
+
+Run it from `direct-integration`. `<commit>` is the commit of the API definition, so that the line links stay correct.
 
 ## Status
 
