@@ -1,0 +1,2017 @@
+{
+  "name": "Direct integration: incoming payments (the DFSP is the payee)",
+  "test_cases": [
+    {
+      "id": "DI-INC-01",
+      "name": "DI-INC-01 Successful lookup",
+      "meta": {
+        "info": "DI-INC-01 Successful lookup"
+      },
+      "requests": [
+        {
+          "id": "Lookup",
+          "description": "Look up a party",
+          "apiVersion": {
+            "minorVersion": 0,
+            "majorVersion": 2,
+            "type": "iso20022",
+            "asynchronous": true
+          },
+          "url": "{$inputs.HUB_FSPIOP_URL}",
+          "operationPath": "/parties/{Type}/{ID}/{SubId}",
+          "method": "get",
+          "headers": {
+            "Accept": "application/vnd.interoperability.iso20022.parties+json;version=2.0",
+            "Content-Type": "application/vnd.interoperability.iso20022.parties+json;version=2.0",
+            "Date": "{$function.generic.curDate}",
+            "FSPIOP-Source": "{$inputs.TTK_FSP_ID}",
+            "FSPIOP-Destination": "{$inputs.DFSP_ID}"
+          },
+          "tests": {
+            "assertions": [
+              {
+                "id": "rsp-202",
+                "description": "The hub accepts the request with 202",
+                "exec": [
+                  "expect(response.status).to.equal(202)"
+                ]
+              },
+              {
+                "id": "cb-received",
+                "description": "A callback is received",
+                "exec": [
+                  "expect(callback).to.be.an('object')",
+                  "expect(callback.body).to.be.an('object')"
+                ]
+              },
+              {
+                "id": "cb-content-type",
+                "description": "Callback content type is the ISO 20022 type for the resource, version 2.0",
+                "exec": [
+                  "const h = (n) => { const k = Object.keys(callback.headers || {}).find((x) => x.toLowerCase() === n); return k ? callback.headers[k] : undefined };",
+                  "expect(h('content-type')).to.match(/^application\\/vnd\\.interoperability\\.iso20022\\.parties\\+json;\\s?version=2\\.0$/)"
+                ]
+              },
+              {
+                "id": "cb-jws",
+                "description": "The callback signature validates with the DFSP's published key (checked when DFSP_JWS_PUBLIC_KEY is set)",
+                "exec": [
+                  "if (environment.cbJws !== undefined) expect(environment.cbJws).to.equal('VALID')"
+                ]
+              },
+              {
+                "id": "cb-jws-protected-header",
+                "description": "The signature's protected header is complete and matches the callback's headers (checked when DFSP_JWS_PUBLIC_KEY is set)",
+                "exec": [
+                  "if (environment.cbJwsHeaders !== undefined) expect(environment.cbJwsHeaders).to.equal('VALID')"
+                ]
+              },
+              {
+                "id": "cb-source",
+                "description": "FSPIOP-Source is the DFSP under test",
+                "exec": [
+                  "const h = (n) => { const k = Object.keys(callback.headers || {}).find((x) => x.toLowerCase() === n); return k ? callback.headers[k] : undefined };",
+                  "expect(h('fspiop-source')).to.equal('{$inputs.DFSP_ID}')"
+                ]
+              },
+              {
+                "id": "cb-destination",
+                "description": "FSPIOP-Destination is the requesting participant",
+                "exec": [
+                  "const h = (n) => { const k = Object.keys(callback.headers || {}).find((x) => x.toLowerCase() === n); return k ? callback.headers[k] : undefined };",
+                  "expect(h('fspiop-destination')).to.equal('{$inputs.TTK_FSP_ID}')"
+                ]
+              },
+              {
+                "id": "cb-vrfctn",
+                "description": "The party is reported as found (Rpt.Vrfctn is true)",
+                "exec": [
+                  "expect(callback.body.Rpt.Vrfctn).to.equal(true)"
+                ]
+              },
+              {
+                "id": "cb-party-id",
+                "description": "The party identifier and type are those requested",
+                "exec": [
+                  "const pty = callback.body.Rpt.UpdtdPtyAndAcctId.Pty.Id",
+                  "const o = (pty.PrvtId || pty.OrgId).Othr; const oo = [].concat(o)[0]",
+                  "expect(oo.Id).to.equal('{$inputs.PAYEE_ID}')",
+                  "expect(oo.SchmeNm.Prtry).to.equal('{$inputs.LOOKUP_ID_TYPE}')"
+                ]
+              },
+              {
+                "id": "cb-name",
+                "description": "The party's name is present",
+                "exec": [
+                  "expect(callback.body.Rpt.UpdtdPtyAndAcctId.Pty.Nm).to.be.a('string').that.is.not.empty"
+                ]
+              },
+              {
+                "id": "cb-currency",
+                "description": "The party's currencies include the test currency",
+                "exec": [
+                  "const c = callback.body.Rpt.UpdtdPtyAndAcctId.Acct.Ccy",
+                  "expect([].concat(c)).to.include('{$inputs.CURRENCY}')"
+                ]
+              },
+              {
+                "id": "cb-agent",
+                "description": "The party's DFSP is the DFSP under test",
+                "exec": [
+                  "const a = callback.body.Rpt.UpdtdPtyAndAcctId.Agt.FinInstnId.Othr",
+                  "expect([].concat(a)[0].Id).to.equal('{$inputs.DFSP_ID}')"
+                ]
+              },
+              {
+                "id": "cb-assignment",
+                "description": "Assgnmt names the DFSP as sender and the participant as recipient",
+                "exec": [
+                  "const g = callback.body.Assgnmt",
+                  "expect([].concat(g.Assgnr.Agt.FinInstnId.Othr)[0].Id).to.equal('{$inputs.DFSP_ID}')",
+                  "expect([].concat(g.Assgne.Agt.FinInstnId.Othr)[0].Id).to.equal('{$inputs.TTK_FSP_ID}')"
+                ]
+              }
+            ]
+          },
+          "params": {
+            "Type": "{$inputs.LOOKUP_ID_TYPE}",
+            "ID": "{$inputs.PAYEE_ID}",
+            "SubId": "{$inputs.DFSP_ID}"
+          },
+          "scriptingEngine": "javascript",
+          "scripts": {
+            "preRequest": {
+              "exec": [
+                ""
+              ]
+            },
+            "postRequest": {
+              "exec": [
+                "const cert = `{$inputs.DFSP_JWS_PUBLIC_KEY}`",
+                "const lc = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [k.toLowerCase(), v]))",
+                "environment.cbJws = undefined",
+                "environment.cbJwsHeaders = undefined",
+                "if (callback && callback.headers && cert.indexOf('BEGIN') >= 0) { environment.cbJws = custom.jws.validateCallback(lc(callback.headers), callback.body, cert); environment.cbJwsHeaders = custom.jws.validateCallbackProtectedHeaders(lc(callback.headers)) }"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "DI-INC-02",
+      "name": "DI-INC-02 Unsupported identifier type",
+      "meta": {
+        "info": "DI-INC-02 Unsupported identifier type"
+      },
+      "requests": [
+        {
+          "id": "Lookup",
+          "description": "Look up with an identifier type the DFSP does not support",
+          "apiVersion": {
+            "minorVersion": 0,
+            "majorVersion": 2,
+            "type": "iso20022",
+            "asynchronous": true
+          },
+          "url": "{$inputs.HUB_FSPIOP_URL}",
+          "operationPath": "/parties/{Type}/{ID}/{SubId}",
+          "method": "get",
+          "headers": {
+            "Accept": "application/vnd.interoperability.iso20022.parties+json;version=2.0",
+            "Content-Type": "application/vnd.interoperability.iso20022.parties+json;version=2.0",
+            "Date": "{$function.generic.curDate}",
+            "FSPIOP-Source": "{$inputs.TTK_FSP_ID}",
+            "FSPIOP-Destination": "{$inputs.DFSP_ID}"
+          },
+          "tests": {
+            "assertions": [
+              {
+                "id": "rsp-202",
+                "description": "The hub accepts the request with 202",
+                "exec": [
+                  "expect(response.status).to.equal(202)"
+                ]
+              },
+              {
+                "id": "cb-received",
+                "description": "A callback is received",
+                "exec": [
+                  "expect(callback).to.be.an('object')",
+                  "expect(callback.body).to.be.an('object')"
+                ]
+              },
+              {
+                "id": "cb-content-type",
+                "description": "Callback content type is the ISO 20022 type for the resource, version 2.0",
+                "exec": [
+                  "const h = (n) => { const k = Object.keys(callback.headers || {}).find((x) => x.toLowerCase() === n); return k ? callback.headers[k] : undefined };",
+                  "expect(h('content-type')).to.match(/^application\\/vnd\\.interoperability\\.iso20022\\.parties\\+json;\\s?version=2\\.0$/)"
+                ]
+              },
+              {
+                "id": "cb-jws",
+                "description": "The callback signature validates with the DFSP's published key (checked when DFSP_JWS_PUBLIC_KEY is set)",
+                "exec": [
+                  "if (environment.cbJws !== undefined) expect(environment.cbJws).to.equal('VALID')"
+                ]
+              },
+              {
+                "id": "cb-jws-protected-header",
+                "description": "The signature's protected header is complete and matches the callback's headers (checked when DFSP_JWS_PUBLIC_KEY is set)",
+                "exec": [
+                  "if (environment.cbJwsHeaders !== undefined) expect(environment.cbJwsHeaders).to.equal('VALID')"
+                ]
+              },
+              {
+                "id": "cb-source",
+                "description": "FSPIOP-Source is the DFSP under test",
+                "exec": [
+                  "const h = (n) => { const k = Object.keys(callback.headers || {}).find((x) => x.toLowerCase() === n); return k ? callback.headers[k] : undefined };",
+                  "expect(h('fspiop-source')).to.equal('{$inputs.DFSP_ID}')"
+                ]
+              },
+              {
+                "id": "cb-destination",
+                "description": "FSPIOP-Destination is the requesting participant",
+                "exec": [
+                  "const h = (n) => { const k = Object.keys(callback.headers || {}).find((x) => x.toLowerCase() === n); return k ? callback.headers[k] : undefined };",
+                  "expect(h('fspiop-destination')).to.equal('{$inputs.TTK_FSP_ID}')"
+                ]
+              },
+              {
+                "id": "cb-error-code",
+                "description": "The error code is 3100",
+                "exec": [
+                  "expect(callback.body.Rpt.Rsn.Cd).to.equal('3100')"
+                ]
+              },
+              {
+                "id": "cb-no-party",
+                "description": "No party data is returned",
+                "exec": [
+                  "expect(callback.body.Rpt.UpdtdPtyAndAcctId).to.equal(undefined)"
+                ]
+              }
+            ]
+          },
+          "params": {
+            "Type": "{$inputs.UNSUPPORTED_ID_TYPE}",
+            "ID": "{$inputs.PAYEE_ID}",
+            "SubId": "{$inputs.DFSP_ID}"
+          },
+          "scriptingEngine": "javascript",
+          "scripts": {
+            "preRequest": {
+              "exec": [
+                ""
+              ]
+            },
+            "postRequest": {
+              "exec": [
+                "const cert = `{$inputs.DFSP_JWS_PUBLIC_KEY}`",
+                "const lc = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [k.toLowerCase(), v]))",
+                "environment.cbJws = undefined",
+                "environment.cbJwsHeaders = undefined",
+                "if (callback && callback.headers && cert.indexOf('BEGIN') >= 0) { environment.cbJws = custom.jws.validateCallback(lc(callback.headers), callback.body, cert); environment.cbJwsHeaders = custom.jws.validateCallbackProtectedHeaders(lc(callback.headers)) }"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "DI-INC-03",
+      "name": "DI-INC-03 Party not found",
+      "meta": {
+        "info": "DI-INC-03 Party not found"
+      },
+      "requests": [
+        {
+          "id": "Lookup",
+          "description": "Look up an identifier that does not exist",
+          "apiVersion": {
+            "minorVersion": 0,
+            "majorVersion": 2,
+            "type": "iso20022",
+            "asynchronous": true
+          },
+          "url": "{$inputs.HUB_FSPIOP_URL}",
+          "operationPath": "/parties/{Type}/{ID}/{SubId}",
+          "method": "get",
+          "headers": {
+            "Accept": "application/vnd.interoperability.iso20022.parties+json;version=2.0",
+            "Content-Type": "application/vnd.interoperability.iso20022.parties+json;version=2.0",
+            "Date": "{$function.generic.curDate}",
+            "FSPIOP-Source": "{$inputs.TTK_FSP_ID}",
+            "FSPIOP-Destination": "{$inputs.DFSP_ID}"
+          },
+          "tests": {
+            "assertions": [
+              {
+                "id": "rsp-202",
+                "description": "The hub accepts the request with 202",
+                "exec": [
+                  "expect(response.status).to.equal(202)"
+                ]
+              },
+              {
+                "id": "cb-received",
+                "description": "A callback is received",
+                "exec": [
+                  "expect(callback).to.be.an('object')",
+                  "expect(callback.body).to.be.an('object')"
+                ]
+              },
+              {
+                "id": "cb-content-type",
+                "description": "Callback content type is the ISO 20022 type for the resource, version 2.0",
+                "exec": [
+                  "const h = (n) => { const k = Object.keys(callback.headers || {}).find((x) => x.toLowerCase() === n); return k ? callback.headers[k] : undefined };",
+                  "expect(h('content-type')).to.match(/^application\\/vnd\\.interoperability\\.iso20022\\.parties\\+json;\\s?version=2\\.0$/)"
+                ]
+              },
+              {
+                "id": "cb-jws",
+                "description": "The callback signature validates with the DFSP's published key (checked when DFSP_JWS_PUBLIC_KEY is set)",
+                "exec": [
+                  "if (environment.cbJws !== undefined) expect(environment.cbJws).to.equal('VALID')"
+                ]
+              },
+              {
+                "id": "cb-jws-protected-header",
+                "description": "The signature's protected header is complete and matches the callback's headers (checked when DFSP_JWS_PUBLIC_KEY is set)",
+                "exec": [
+                  "if (environment.cbJwsHeaders !== undefined) expect(environment.cbJwsHeaders).to.equal('VALID')"
+                ]
+              },
+              {
+                "id": "cb-source",
+                "description": "FSPIOP-Source is the DFSP under test",
+                "exec": [
+                  "const h = (n) => { const k = Object.keys(callback.headers || {}).find((x) => x.toLowerCase() === n); return k ? callback.headers[k] : undefined };",
+                  "expect(h('fspiop-source')).to.equal('{$inputs.DFSP_ID}')"
+                ]
+              },
+              {
+                "id": "cb-destination",
+                "description": "FSPIOP-Destination is the requesting participant",
+                "exec": [
+                  "const h = (n) => { const k = Object.keys(callback.headers || {}).find((x) => x.toLowerCase() === n); return k ? callback.headers[k] : undefined };",
+                  "expect(h('fspiop-destination')).to.equal('{$inputs.TTK_FSP_ID}')"
+                ]
+              },
+              {
+                "id": "cb-error-code",
+                "description": "The error code is 3204",
+                "exec": [
+                  "expect(callback.body.Rpt.Rsn.Cd).to.equal('3204')"
+                ]
+              },
+              {
+                "id": "cb-no-party",
+                "description": "No party data is returned",
+                "exec": [
+                  "expect(callback.body.Rpt.UpdtdPtyAndAcctId).to.equal(undefined)"
+                ]
+              }
+            ]
+          },
+          "params": {
+            "Type": "{$inputs.LOOKUP_ID_TYPE}",
+            "ID": "{$inputs.UNKNOWN_ID}",
+            "SubId": "{$inputs.DFSP_ID}"
+          },
+          "scriptingEngine": "javascript",
+          "scripts": {
+            "preRequest": {
+              "exec": [
+                ""
+              ]
+            },
+            "postRequest": {
+              "exec": [
+                "const cert = `{$inputs.DFSP_JWS_PUBLIC_KEY}`",
+                "const lc = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [k.toLowerCase(), v]))",
+                "environment.cbJws = undefined",
+                "environment.cbJwsHeaders = undefined",
+                "if (callback && callback.headers && cert.indexOf('BEGIN') >= 0) { environment.cbJws = custom.jws.validateCallback(lc(callback.headers), callback.body, cert); environment.cbJwsHeaders = custom.jws.validateCallbackProtectedHeaders(lc(callback.headers)) }"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "DI-INC-04",
+      "name": "DI-INC-04 Successful quote",
+      "meta": {
+        "info": "DI-INC-04 Successful quote"
+      },
+      "requests": [
+        {
+          "id": "Send-quote",
+          "description": "Request a quote",
+          "apiVersion": {
+            "minorVersion": 0,
+            "majorVersion": 2,
+            "type": "iso20022",
+            "asynchronous": true
+          },
+          "url": "{$inputs.HUB_FSPIOP_URL}",
+          "operationPath": "/quotes",
+          "method": "post",
+          "headers": {
+            "Accept": "application/vnd.interoperability.iso20022.quotes+json;version=2.0",
+            "Content-Type": "application/vnd.interoperability.iso20022.quotes+json;version=2.0",
+            "Date": "{$function.generic.curDate}",
+            "FSPIOP-Source": "{$inputs.TTK_FSP_ID}",
+            "FSPIOP-Destination": "{$inputs.DFSP_ID}"
+          },
+          "tests": {
+            "assertions": [
+              {
+                "id": "rsp-202",
+                "description": "The hub accepts the request with 202",
+                "exec": [
+                  "expect(response.status).to.equal(202)"
+                ]
+              },
+              {
+                "id": "cb-received",
+                "description": "A callback is received",
+                "exec": [
+                  "expect(callback).to.be.an('object')",
+                  "expect(callback.body).to.be.an('object')"
+                ]
+              },
+              {
+                "id": "cb-content-type",
+                "description": "Callback content type is the ISO 20022 type for the resource, version 2.0",
+                "exec": [
+                  "const h = (n) => { const k = Object.keys(callback.headers || {}).find((x) => x.toLowerCase() === n); return k ? callback.headers[k] : undefined };",
+                  "expect(h('content-type')).to.match(/^application\\/vnd\\.interoperability\\.iso20022\\.quotes\\+json;\\s?version=2\\.0$/)"
+                ]
+              },
+              {
+                "id": "cb-jws",
+                "description": "The callback signature validates with the DFSP's published key (checked when DFSP_JWS_PUBLIC_KEY is set)",
+                "exec": [
+                  "if (environment.cbJws !== undefined) expect(environment.cbJws).to.equal('VALID')"
+                ]
+              },
+              {
+                "id": "cb-jws-protected-header",
+                "description": "The signature's protected header is complete and matches the callback's headers (checked when DFSP_JWS_PUBLIC_KEY is set)",
+                "exec": [
+                  "if (environment.cbJwsHeaders !== undefined) expect(environment.cbJwsHeaders).to.equal('VALID')"
+                ]
+              },
+              {
+                "id": "cb-source",
+                "description": "FSPIOP-Source is the DFSP under test",
+                "exec": [
+                  "const h = (n) => { const k = Object.keys(callback.headers || {}).find((x) => x.toLowerCase() === n); return k ? callback.headers[k] : undefined };",
+                  "expect(h('fspiop-source')).to.equal('{$inputs.DFSP_ID}')"
+                ]
+              },
+              {
+                "id": "cb-destination",
+                "description": "FSPIOP-Destination is the requesting participant",
+                "exec": [
+                  "const h = (n) => { const k = Object.keys(callback.headers || {}).find((x) => x.toLowerCase() === n); return k ? callback.headers[k] : undefined };",
+                  "expect(h('fspiop-destination')).to.equal('{$inputs.TTK_FSP_ID}')"
+                ]
+              },
+              {
+                "id": "cb-txid-echo",
+                "description": "The quote id is echoed",
+                "exec": [
+                  "expect(callback.body.CdtTrfTxInf.PmtId.TxId).to.equal(request.body.CdtTrfTxInf.PmtId.TxId)"
+                ]
+              },
+              {
+                "id": "cb-amount",
+                "description": "The transfer amount is in the test currency and is a positive amount",
+                "exec": [
+                  "const a = callback.body.CdtTrfTxInf.IntrBkSttlmAmt",
+                  "expect(a.Ccy).to.equal('{$inputs.CURRENCY}')",
+                  "expect(Number(a.ActiveCurrencyAndAmount)).to.be.above(0)"
+                ]
+              },
+              {
+                "id": "cb-expiry",
+                "description": "The quote expiry is present and in the future",
+                "exec": [
+                  "const e = callback.body.GrpHdr.PmtInstrXpryDtTm",
+                  "expect(e).to.be.a('string')",
+                  "expect(new Date(e).getTime()).to.be.above(Date.now())"
+                ]
+              },
+              {
+                "id": "cb-ilp-packet",
+                "description": "The ILP packet is a well-formed ILPv4 Prepare packet with a 32-byte condition and an unexpired time",
+                "exec": [
+                  "function parseIlp(p){",
+                  "  const b=Buffer.from(p.replace(/-/g,'+').replace(/_/g,'/'),'base64'); let o=0;",
+                  "  if(b[o++]!==12) throw new Error('not an ILPv4 Prepare packet (type '+b[o-1]+')');",
+                  "  const rl=(()=>{const f=b[o++]; if(f<128) return f; const n=f&127; let v=0; for(let i=0;i<n;i++) v=v*256+b[o++]; return v})();",
+                  "  const amount=b.readBigUInt64BE(o).toString(); o+=8;",
+                  "  const expiresAt=b.slice(o,o+17).toString('ascii'); o+=17;",
+                  "  const condition=b.slice(o,o+32).toString('base64').replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,''); o+=32;",
+                  "  const vs=()=>{const f=b[o++]; let n=f; if(f>=128){const k=f&127; n=0; for(let i=0;i<k;i++) n=n*256+b[o++]}; const s=b.slice(o,o+n); o+=n; return s};",
+                  "  const destination=vs().toString('ascii'); const data=vs();",
+                  "  return {amount,expiresAt,condition,destination,data};",
+                  "}",
+                  "const p = parseIlp(callback.body.CdtTrfTxInf.VrfctnOfTerms.IlpV4PrepPacket)",
+                  "expect(p.condition).to.have.lengthOf(43)",
+                  "const t = p.expiresAt",
+                  "const exp = Date.UTC(+t.slice(0,4), +t.slice(4,6)-1, +t.slice(6,8), +t.slice(8,10), +t.slice(10,12), +t.slice(12,14), +t.slice(14,17))",
+                  "expect(exp).to.be.above(Date.now())"
+                ]
+              }
+            ]
+          },
+          "body": {
+            "GrpHdr": {
+              "MsgId": "{$function.generic.generateULID}",
+              "CreDtTm": "{$function.generic.curDateISO}",
+              "PmtInstrXpryDtTm": "{$environment.EXPIRY}",
+              "NbOfTxs": "1",
+              "SttlmInf": {
+                "SttlmMtd": "CLRG"
+              }
+            },
+            "CdtTrfTxInf": {
+              "PmtId": {
+                "TxId": "{$function.generic.generateULID}",
+                "EndToEndId": "{$function.generic.generateULID}"
+              },
+              "IntrBkSttlmAmt": {
+                "Ccy": "{$inputs.CURRENCY}",
+                "ActiveCurrencyAndAmount": "{$inputs.AMOUNT}"
+              },
+              "ChrgBr": "SHAR",
+              "Purp": {
+                "Prtry": "TRANSFER"
+              },
+              "Dbtr": {
+                "Nm": "{$inputs.PAYER_NAME}",
+                "Id": {
+                  "PrvtId": {
+                    "Othr": {
+                      "Id": "{$inputs.PAYER_ID}",
+                      "SchmeNm": {
+                        "Prtry": "{$inputs.LOOKUP_ID_TYPE}"
+                      }
+                    }
+                  }
+                }
+              },
+              "DbtrAgt": {
+                "FinInstnId": {
+                  "Othr": {
+                    "Id": "{$inputs.TTK_FSP_ID}"
+                  }
+                }
+              },
+              "Cdtr": {
+                "Nm": "{$inputs.PAYEE_NAME}",
+                "Id": {
+                  "PrvtId": {
+                    "Othr": {
+                      "Id": "{$inputs.PAYEE_ID}",
+                      "SchmeNm": {
+                        "Prtry": "{$inputs.LOOKUP_ID_TYPE}"
+                      }
+                    }
+                  }
+                }
+              },
+              "CdtrAgt": {
+                "FinInstnId": {
+                  "Othr": {
+                    "Id": "{$inputs.DFSP_ID}"
+                  }
+                }
+              }
+            }
+          },
+          "scriptingEngine": "javascript",
+          "scripts": {
+            "preRequest": {
+              "exec": [
+                "environment.EXPIRY = new Date(Date.now() + 300000).toISOString()"
+              ]
+            },
+            "postRequest": {
+              "exec": [
+                "const cert = `{$inputs.DFSP_JWS_PUBLIC_KEY}`",
+                "const lc = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [k.toLowerCase(), v]))",
+                "environment.cbJws = undefined",
+                "environment.cbJwsHeaders = undefined",
+                "if (callback && callback.headers && cert.indexOf('BEGIN') >= 0) { environment.cbJws = custom.jws.validateCallback(lc(callback.headers), callback.body, cert); environment.cbJwsHeaders = custom.jws.validateCallbackProtectedHeaders(lc(callback.headers)) }"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "DI-INC-06",
+      "name": "DI-INC-06 Quote in an unsupported currency",
+      "meta": {
+        "info": "DI-INC-06 Quote in an unsupported currency"
+      },
+      "requests": [
+        {
+          "id": "Send-quote",
+          "description": "Request a quote in a currency the DFSP does not support",
+          "apiVersion": {
+            "minorVersion": 0,
+            "majorVersion": 2,
+            "type": "iso20022",
+            "asynchronous": true
+          },
+          "url": "{$inputs.HUB_FSPIOP_URL}",
+          "operationPath": "/quotes",
+          "method": "post",
+          "headers": {
+            "Accept": "application/vnd.interoperability.iso20022.quotes+json;version=2.0",
+            "Content-Type": "application/vnd.interoperability.iso20022.quotes+json;version=2.0",
+            "Date": "{$function.generic.curDate}",
+            "FSPIOP-Source": "{$inputs.TTK_FSP_ID}",
+            "FSPIOP-Destination": "{$inputs.DFSP_ID}"
+          },
+          "tests": {
+            "assertions": [
+              {
+                "id": "rsp-202",
+                "description": "The hub accepts the request with 202",
+                "exec": [
+                  "expect(response.status).to.equal(202)"
+                ]
+              },
+              {
+                "id": "cb-received",
+                "description": "A callback is received",
+                "exec": [
+                  "expect(callback).to.be.an('object')",
+                  "expect(callback.body).to.be.an('object')"
+                ]
+              },
+              {
+                "id": "cb-content-type",
+                "description": "Callback content type is the ISO 20022 type for the resource, version 2.0",
+                "exec": [
+                  "const h = (n) => { const k = Object.keys(callback.headers || {}).find((x) => x.toLowerCase() === n); return k ? callback.headers[k] : undefined };",
+                  "expect(h('content-type')).to.match(/^application\\/vnd\\.interoperability\\.iso20022\\.quotes\\+json;\\s?version=2\\.0$/)"
+                ]
+              },
+              {
+                "id": "cb-jws",
+                "description": "The callback signature validates with the DFSP's published key (checked when DFSP_JWS_PUBLIC_KEY is set)",
+                "exec": [
+                  "if (environment.cbJws !== undefined) expect(environment.cbJws).to.equal('VALID')"
+                ]
+              },
+              {
+                "id": "cb-jws-protected-header",
+                "description": "The signature's protected header is complete and matches the callback's headers (checked when DFSP_JWS_PUBLIC_KEY is set)",
+                "exec": [
+                  "if (environment.cbJwsHeaders !== undefined) expect(environment.cbJwsHeaders).to.equal('VALID')"
+                ]
+              },
+              {
+                "id": "cb-source",
+                "description": "FSPIOP-Source is the DFSP under test",
+                "exec": [
+                  "const h = (n) => { const k = Object.keys(callback.headers || {}).find((x) => x.toLowerCase() === n); return k ? callback.headers[k] : undefined };",
+                  "expect(h('fspiop-source')).to.equal('{$inputs.DFSP_ID}')"
+                ]
+              },
+              {
+                "id": "cb-destination",
+                "description": "FSPIOP-Destination is the requesting participant",
+                "exec": [
+                  "const h = (n) => { const k = Object.keys(callback.headers || {}).find((x) => x.toLowerCase() === n); return k ? callback.headers[k] : undefined };",
+                  "expect(h('fspiop-destination')).to.equal('{$inputs.TTK_FSP_ID}')"
+                ]
+              },
+              {
+                "id": "cb-error-code",
+                "description": "The error code is 5106",
+                "exec": [
+                  "expect(callback.body.TxInfAndSts.StsRsnInf.Rsn.Prtry).to.equal('5106')"
+                ]
+              },
+              {
+                "id": "cb-no-terms",
+                "description": "No ILP packet is returned",
+                "exec": [
+                  "expect((callback.body.CdtTrfTxInf || {}).VrfctnOfTerms).to.equal(undefined)"
+                ]
+              }
+            ]
+          },
+          "body": {
+            "GrpHdr": {
+              "MsgId": "{$function.generic.generateULID}",
+              "CreDtTm": "{$function.generic.curDateISO}",
+              "PmtInstrXpryDtTm": "{$environment.EXPIRY}",
+              "NbOfTxs": "1",
+              "SttlmInf": {
+                "SttlmMtd": "CLRG"
+              }
+            },
+            "CdtTrfTxInf": {
+              "PmtId": {
+                "TxId": "{$function.generic.generateULID}",
+                "EndToEndId": "{$function.generic.generateULID}"
+              },
+              "IntrBkSttlmAmt": {
+                "Ccy": "{$inputs.UNSUPPORTED_CURRENCY}",
+                "ActiveCurrencyAndAmount": "{$inputs.AMOUNT}"
+              },
+              "ChrgBr": "SHAR",
+              "Purp": {
+                "Prtry": "TRANSFER"
+              },
+              "Dbtr": {
+                "Nm": "{$inputs.PAYER_NAME}",
+                "Id": {
+                  "PrvtId": {
+                    "Othr": {
+                      "Id": "{$inputs.PAYER_ID}",
+                      "SchmeNm": {
+                        "Prtry": "{$inputs.LOOKUP_ID_TYPE}"
+                      }
+                    }
+                  }
+                }
+              },
+              "DbtrAgt": {
+                "FinInstnId": {
+                  "Othr": {
+                    "Id": "{$inputs.TTK_FSP_ID}"
+                  }
+                }
+              },
+              "Cdtr": {
+                "Nm": "{$inputs.PAYEE_NAME}",
+                "Id": {
+                  "PrvtId": {
+                    "Othr": {
+                      "Id": "{$inputs.PAYEE_ID}",
+                      "SchmeNm": {
+                        "Prtry": "{$inputs.LOOKUP_ID_TYPE}"
+                      }
+                    }
+                  }
+                }
+              },
+              "CdtrAgt": {
+                "FinInstnId": {
+                  "Othr": {
+                    "Id": "{$inputs.DFSP_ID}"
+                  }
+                }
+              }
+            }
+          },
+          "scriptingEngine": "javascript",
+          "scripts": {
+            "preRequest": {
+              "exec": [
+                "environment.EXPIRY = new Date(Date.now() + 300000).toISOString()"
+              ]
+            },
+            "postRequest": {
+              "exec": [
+                "const cert = `{$inputs.DFSP_JWS_PUBLIC_KEY}`",
+                "const lc = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [k.toLowerCase(), v]))",
+                "environment.cbJws = undefined",
+                "environment.cbJwsHeaders = undefined",
+                "if (callback && callback.headers && cert.indexOf('BEGIN') >= 0) { environment.cbJws = custom.jws.validateCallback(lc(callback.headers), callback.body, cert); environment.cbJwsHeaders = custom.jws.validateCallbackProtectedHeaders(lc(callback.headers)) }"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "DI-INC-07",
+      "name": "DI-INC-07 Quote above the DFSP's limit",
+      "meta": {
+        "info": "DI-INC-07 Quote above the DFSP's limit"
+      },
+      "requests": [
+        {
+          "id": "Send-quote",
+          "description": "Request a quote above the DFSP's limit",
+          "apiVersion": {
+            "minorVersion": 0,
+            "majorVersion": 2,
+            "type": "iso20022",
+            "asynchronous": true
+          },
+          "url": "{$inputs.HUB_FSPIOP_URL}",
+          "operationPath": "/quotes",
+          "method": "post",
+          "headers": {
+            "Accept": "application/vnd.interoperability.iso20022.quotes+json;version=2.0",
+            "Content-Type": "application/vnd.interoperability.iso20022.quotes+json;version=2.0",
+            "Date": "{$function.generic.curDate}",
+            "FSPIOP-Source": "{$inputs.TTK_FSP_ID}",
+            "FSPIOP-Destination": "{$inputs.DFSP_ID}"
+          },
+          "tests": {
+            "assertions": [
+              {
+                "id": "rsp-202",
+                "description": "The hub accepts the request with 202",
+                "exec": [
+                  "expect(response.status).to.equal(202)"
+                ]
+              },
+              {
+                "id": "cb-received",
+                "description": "A callback is received",
+                "exec": [
+                  "expect(callback).to.be.an('object')",
+                  "expect(callback.body).to.be.an('object')"
+                ]
+              },
+              {
+                "id": "cb-content-type",
+                "description": "Callback content type is the ISO 20022 type for the resource, version 2.0",
+                "exec": [
+                  "const h = (n) => { const k = Object.keys(callback.headers || {}).find((x) => x.toLowerCase() === n); return k ? callback.headers[k] : undefined };",
+                  "expect(h('content-type')).to.match(/^application\\/vnd\\.interoperability\\.iso20022\\.quotes\\+json;\\s?version=2\\.0$/)"
+                ]
+              },
+              {
+                "id": "cb-jws",
+                "description": "The callback signature validates with the DFSP's published key (checked when DFSP_JWS_PUBLIC_KEY is set)",
+                "exec": [
+                  "if (environment.cbJws !== undefined) expect(environment.cbJws).to.equal('VALID')"
+                ]
+              },
+              {
+                "id": "cb-jws-protected-header",
+                "description": "The signature's protected header is complete and matches the callback's headers (checked when DFSP_JWS_PUBLIC_KEY is set)",
+                "exec": [
+                  "if (environment.cbJwsHeaders !== undefined) expect(environment.cbJwsHeaders).to.equal('VALID')"
+                ]
+              },
+              {
+                "id": "cb-source",
+                "description": "FSPIOP-Source is the DFSP under test",
+                "exec": [
+                  "const h = (n) => { const k = Object.keys(callback.headers || {}).find((x) => x.toLowerCase() === n); return k ? callback.headers[k] : undefined };",
+                  "expect(h('fspiop-source')).to.equal('{$inputs.DFSP_ID}')"
+                ]
+              },
+              {
+                "id": "cb-destination",
+                "description": "FSPIOP-Destination is the requesting participant",
+                "exec": [
+                  "const h = (n) => { const k = Object.keys(callback.headers || {}).find((x) => x.toLowerCase() === n); return k ? callback.headers[k] : undefined };",
+                  "expect(h('fspiop-destination')).to.equal('{$inputs.TTK_FSP_ID}')"
+                ]
+              },
+              {
+                "id": "cb-error-code",
+                "description": "The error code is 5200",
+                "exec": [
+                  "expect(callback.body.TxInfAndSts.StsRsnInf.Rsn.Prtry).to.equal('5200')"
+                ]
+              },
+              {
+                "id": "cb-no-terms",
+                "description": "No ILP packet is returned",
+                "exec": [
+                  "expect((callback.body.CdtTrfTxInf || {}).VrfctnOfTerms).to.equal(undefined)"
+                ]
+              }
+            ]
+          },
+          "body": {
+            "GrpHdr": {
+              "MsgId": "{$function.generic.generateULID}",
+              "CreDtTm": "{$function.generic.curDateISO}",
+              "PmtInstrXpryDtTm": "{$environment.EXPIRY}",
+              "NbOfTxs": "1",
+              "SttlmInf": {
+                "SttlmMtd": "CLRG"
+              }
+            },
+            "CdtTrfTxInf": {
+              "PmtId": {
+                "TxId": "{$function.generic.generateULID}",
+                "EndToEndId": "{$function.generic.generateULID}"
+              },
+              "IntrBkSttlmAmt": {
+                "Ccy": "{$inputs.CURRENCY}",
+                "ActiveCurrencyAndAmount": "{$inputs.OVER_LIMIT_AMOUNT}"
+              },
+              "ChrgBr": "SHAR",
+              "Purp": {
+                "Prtry": "TRANSFER"
+              },
+              "Dbtr": {
+                "Nm": "{$inputs.PAYER_NAME}",
+                "Id": {
+                  "PrvtId": {
+                    "Othr": {
+                      "Id": "{$inputs.PAYER_ID}",
+                      "SchmeNm": {
+                        "Prtry": "{$inputs.LOOKUP_ID_TYPE}"
+                      }
+                    }
+                  }
+                }
+              },
+              "DbtrAgt": {
+                "FinInstnId": {
+                  "Othr": {
+                    "Id": "{$inputs.TTK_FSP_ID}"
+                  }
+                }
+              },
+              "Cdtr": {
+                "Nm": "{$inputs.PAYEE_NAME}",
+                "Id": {
+                  "PrvtId": {
+                    "Othr": {
+                      "Id": "{$inputs.PAYEE_ID}",
+                      "SchmeNm": {
+                        "Prtry": "{$inputs.LOOKUP_ID_TYPE}"
+                      }
+                    }
+                  }
+                }
+              },
+              "CdtrAgt": {
+                "FinInstnId": {
+                  "Othr": {
+                    "Id": "{$inputs.DFSP_ID}"
+                  }
+                }
+              }
+            }
+          },
+          "scriptingEngine": "javascript",
+          "scripts": {
+            "preRequest": {
+              "exec": [
+                "environment.EXPIRY = new Date(Date.now() + 300000).toISOString()"
+              ]
+            },
+            "postRequest": {
+              "exec": [
+                "const cert = `{$inputs.DFSP_JWS_PUBLIC_KEY}`",
+                "const lc = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [k.toLowerCase(), v]))",
+                "environment.cbJws = undefined",
+                "environment.cbJwsHeaders = undefined",
+                "if (callback && callback.headers && cert.indexOf('BEGIN') >= 0) { environment.cbJws = custom.jws.validateCallback(lc(callback.headers), callback.body, cert); environment.cbJwsHeaders = custom.jws.validateCallbackProtectedHeaders(lc(callback.headers)) }"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "DI-INC-08",
+      "name": "DI-INC-08 Quote for a blocked account",
+      "meta": {
+        "info": "DI-INC-08 Quote for a blocked account"
+      },
+      "requests": [
+        {
+          "id": "Send-quote",
+          "description": "Request a quote for a blocked account",
+          "apiVersion": {
+            "minorVersion": 0,
+            "majorVersion": 2,
+            "type": "iso20022",
+            "asynchronous": true
+          },
+          "url": "{$inputs.HUB_FSPIOP_URL}",
+          "operationPath": "/quotes",
+          "method": "post",
+          "headers": {
+            "Accept": "application/vnd.interoperability.iso20022.quotes+json;version=2.0",
+            "Content-Type": "application/vnd.interoperability.iso20022.quotes+json;version=2.0",
+            "Date": "{$function.generic.curDate}",
+            "FSPIOP-Source": "{$inputs.TTK_FSP_ID}",
+            "FSPIOP-Destination": "{$inputs.DFSP_ID}"
+          },
+          "tests": {
+            "assertions": [
+              {
+                "id": "rsp-202",
+                "description": "The hub accepts the request with 202",
+                "exec": [
+                  "expect(response.status).to.equal(202)"
+                ]
+              },
+              {
+                "id": "cb-received",
+                "description": "A callback is received",
+                "exec": [
+                  "expect(callback).to.be.an('object')",
+                  "expect(callback.body).to.be.an('object')"
+                ]
+              },
+              {
+                "id": "cb-content-type",
+                "description": "Callback content type is the ISO 20022 type for the resource, version 2.0",
+                "exec": [
+                  "const h = (n) => { const k = Object.keys(callback.headers || {}).find((x) => x.toLowerCase() === n); return k ? callback.headers[k] : undefined };",
+                  "expect(h('content-type')).to.match(/^application\\/vnd\\.interoperability\\.iso20022\\.quotes\\+json;\\s?version=2\\.0$/)"
+                ]
+              },
+              {
+                "id": "cb-jws",
+                "description": "The callback signature validates with the DFSP's published key (checked when DFSP_JWS_PUBLIC_KEY is set)",
+                "exec": [
+                  "if (environment.cbJws !== undefined) expect(environment.cbJws).to.equal('VALID')"
+                ]
+              },
+              {
+                "id": "cb-jws-protected-header",
+                "description": "The signature's protected header is complete and matches the callback's headers (checked when DFSP_JWS_PUBLIC_KEY is set)",
+                "exec": [
+                  "if (environment.cbJwsHeaders !== undefined) expect(environment.cbJwsHeaders).to.equal('VALID')"
+                ]
+              },
+              {
+                "id": "cb-source",
+                "description": "FSPIOP-Source is the DFSP under test",
+                "exec": [
+                  "const h = (n) => { const k = Object.keys(callback.headers || {}).find((x) => x.toLowerCase() === n); return k ? callback.headers[k] : undefined };",
+                  "expect(h('fspiop-source')).to.equal('{$inputs.DFSP_ID}')"
+                ]
+              },
+              {
+                "id": "cb-destination",
+                "description": "FSPIOP-Destination is the requesting participant",
+                "exec": [
+                  "const h = (n) => { const k = Object.keys(callback.headers || {}).find((x) => x.toLowerCase() === n); return k ? callback.headers[k] : undefined };",
+                  "expect(h('fspiop-destination')).to.equal('{$inputs.TTK_FSP_ID}')"
+                ]
+              },
+              {
+                "id": "cb-payee-error",
+                "description": "A payee error code (5xxx) is returned",
+                "exec": [
+                  "expect(callback.body.TxInfAndSts.StsRsnInf.Rsn.Prtry).to.match(/^5[0-9]{3}$/)"
+                ]
+              }
+            ]
+          },
+          "body": {
+            "GrpHdr": {
+              "MsgId": "{$function.generic.generateULID}",
+              "CreDtTm": "{$function.generic.curDateISO}",
+              "PmtInstrXpryDtTm": "{$environment.EXPIRY}",
+              "NbOfTxs": "1",
+              "SttlmInf": {
+                "SttlmMtd": "CLRG"
+              }
+            },
+            "CdtTrfTxInf": {
+              "PmtId": {
+                "TxId": "{$function.generic.generateULID}",
+                "EndToEndId": "{$function.generic.generateULID}"
+              },
+              "IntrBkSttlmAmt": {
+                "Ccy": "{$inputs.CURRENCY}",
+                "ActiveCurrencyAndAmount": "{$inputs.AMOUNT}"
+              },
+              "ChrgBr": "SHAR",
+              "Purp": {
+                "Prtry": "TRANSFER"
+              },
+              "Dbtr": {
+                "Nm": "{$inputs.PAYER_NAME}",
+                "Id": {
+                  "PrvtId": {
+                    "Othr": {
+                      "Id": "{$inputs.PAYER_ID}",
+                      "SchmeNm": {
+                        "Prtry": "{$inputs.LOOKUP_ID_TYPE}"
+                      }
+                    }
+                  }
+                }
+              },
+              "DbtrAgt": {
+                "FinInstnId": {
+                  "Othr": {
+                    "Id": "{$inputs.TTK_FSP_ID}"
+                  }
+                }
+              },
+              "Cdtr": {
+                "Nm": "{$inputs.PAYEE_NAME}",
+                "Id": {
+                  "PrvtId": {
+                    "Othr": {
+                      "Id": "{$inputs.BLOCKED_ID}",
+                      "SchmeNm": {
+                        "Prtry": "{$inputs.LOOKUP_ID_TYPE}"
+                      }
+                    }
+                  }
+                }
+              },
+              "CdtrAgt": {
+                "FinInstnId": {
+                  "Othr": {
+                    "Id": "{$inputs.DFSP_ID}"
+                  }
+                }
+              }
+            }
+          },
+          "scriptingEngine": "javascript",
+          "scripts": {
+            "preRequest": {
+              "exec": [
+                "environment.EXPIRY = new Date(Date.now() + 300000).toISOString()"
+              ]
+            },
+            "postRequest": {
+              "exec": [
+                "const cert = `{$inputs.DFSP_JWS_PUBLIC_KEY}`",
+                "const lc = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [k.toLowerCase(), v]))",
+                "environment.cbJws = undefined",
+                "environment.cbJwsHeaders = undefined",
+                "if (callback && callback.headers && cert.indexOf('BEGIN') >= 0) { environment.cbJws = custom.jws.validateCallback(lc(callback.headers), callback.body, cert); environment.cbJwsHeaders = custom.jws.validateCallbackProtectedHeaders(lc(callback.headers)) }"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "DI-INC-09",
+      "name": "DI-INC-09 Quote lookup",
+      "meta": {
+        "info": "DI-INC-09 Quote lookup"
+      },
+      "requests": [
+        {
+          "id": "Send-quote",
+          "description": "Request a quote",
+          "apiVersion": {
+            "minorVersion": 0,
+            "majorVersion": 2,
+            "type": "iso20022",
+            "asynchronous": true
+          },
+          "url": "{$inputs.HUB_FSPIOP_URL}",
+          "operationPath": "/quotes",
+          "method": "post",
+          "headers": {
+            "Accept": "application/vnd.interoperability.iso20022.quotes+json;version=2.0",
+            "Content-Type": "application/vnd.interoperability.iso20022.quotes+json;version=2.0",
+            "Date": "{$function.generic.curDate}",
+            "FSPIOP-Source": "{$inputs.TTK_FSP_ID}",
+            "FSPIOP-Destination": "{$inputs.DFSP_ID}"
+          },
+          "tests": {
+            "assertions": [
+              {
+                "id": "rsp-202",
+                "description": "202",
+                "exec": [
+                  "expect(response.status).to.equal(202)"
+                ]
+              }
+            ]
+          },
+          "body": {
+            "GrpHdr": {
+              "MsgId": "{$function.generic.generateULID}",
+              "CreDtTm": "{$function.generic.curDateISO}",
+              "PmtInstrXpryDtTm": "{$environment.EXPIRY}",
+              "NbOfTxs": "1",
+              "SttlmInf": {
+                "SttlmMtd": "CLRG"
+              }
+            },
+            "CdtTrfTxInf": {
+              "PmtId": {
+                "TxId": "{$function.generic.generateULID}",
+                "EndToEndId": "{$function.generic.generateULID}"
+              },
+              "IntrBkSttlmAmt": {
+                "Ccy": "{$inputs.CURRENCY}",
+                "ActiveCurrencyAndAmount": "{$inputs.AMOUNT}"
+              },
+              "ChrgBr": "SHAR",
+              "Purp": {
+                "Prtry": "TRANSFER"
+              },
+              "Dbtr": {
+                "Nm": "{$inputs.PAYER_NAME}",
+                "Id": {
+                  "PrvtId": {
+                    "Othr": {
+                      "Id": "{$inputs.PAYER_ID}",
+                      "SchmeNm": {
+                        "Prtry": "{$inputs.LOOKUP_ID_TYPE}"
+                      }
+                    }
+                  }
+                }
+              },
+              "DbtrAgt": {
+                "FinInstnId": {
+                  "Othr": {
+                    "Id": "{$inputs.TTK_FSP_ID}"
+                  }
+                }
+              },
+              "Cdtr": {
+                "Nm": "{$inputs.PAYEE_NAME}",
+                "Id": {
+                  "PrvtId": {
+                    "Othr": {
+                      "Id": "{$inputs.PAYEE_ID}",
+                      "SchmeNm": {
+                        "Prtry": "{$inputs.LOOKUP_ID_TYPE}"
+                      }
+                    }
+                  }
+                }
+              },
+              "CdtrAgt": {
+                "FinInstnId": {
+                  "Othr": {
+                    "Id": "{$inputs.DFSP_ID}"
+                  }
+                }
+              }
+            }
+          },
+          "scriptingEngine": "javascript",
+          "scripts": {
+            "preRequest": {
+              "exec": [
+                "environment.EXPIRY = new Date(Date.now() + 300000).toISOString()"
+              ]
+            },
+            "postRequest": {
+              "exec": [
+                "const cert = `{$inputs.DFSP_JWS_PUBLIC_KEY}`",
+                "const lc = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [k.toLowerCase(), v]))",
+                "environment.cbJws = undefined",
+                "environment.cbJwsHeaders = undefined",
+                "if (callback && callback.headers && cert.indexOf('BEGIN') >= 0) { environment.cbJws = custom.jws.validateCallback(lc(callback.headers), callback.body, cert); environment.cbJwsHeaders = custom.jws.validateCallbackProtectedHeaders(lc(callback.headers)) }"
+              ]
+            }
+          }
+        },
+        {
+          "id": "Get-quote",
+          "description": "Ask for the same quote again",
+          "apiVersion": {
+            "minorVersion": 0,
+            "majorVersion": 2,
+            "type": "iso20022",
+            "asynchronous": true
+          },
+          "url": "{$inputs.HUB_FSPIOP_URL}",
+          "operationPath": "/quotes/{ID}",
+          "method": "get",
+          "headers": {
+            "Accept": "application/vnd.interoperability.iso20022.quotes+json;version=2.0",
+            "Content-Type": "application/vnd.interoperability.iso20022.quotes+json;version=2.0",
+            "Date": "{$function.generic.curDate}",
+            "FSPIOP-Source": "{$inputs.TTK_FSP_ID}",
+            "FSPIOP-Destination": "{$inputs.DFSP_ID}"
+          },
+          "tests": {
+            "assertions": [
+              {
+                "id": "rsp-202",
+                "description": "The hub accepts the request with 202",
+                "exec": [
+                  "expect(response.status).to.equal(202)"
+                ]
+              },
+              {
+                "id": "cb-received",
+                "description": "A callback is received",
+                "exec": [
+                  "expect(callback).to.be.an('object')",
+                  "expect(callback.body).to.be.an('object')"
+                ]
+              },
+              {
+                "id": "cb-content-type",
+                "description": "Callback content type is the ISO 20022 type for the resource, version 2.0",
+                "exec": [
+                  "const h = (n) => { const k = Object.keys(callback.headers || {}).find((x) => x.toLowerCase() === n); return k ? callback.headers[k] : undefined };",
+                  "expect(h('content-type')).to.match(/^application\\/vnd\\.interoperability\\.iso20022\\.quotes\\+json;\\s?version=2\\.0$/)"
+                ]
+              },
+              {
+                "id": "cb-jws",
+                "description": "The callback signature validates with the DFSP's published key (checked when DFSP_JWS_PUBLIC_KEY is set)",
+                "exec": [
+                  "if (environment.cbJws !== undefined) expect(environment.cbJws).to.equal('VALID')"
+                ]
+              },
+              {
+                "id": "cb-jws-protected-header",
+                "description": "The signature's protected header is complete and matches the callback's headers (checked when DFSP_JWS_PUBLIC_KEY is set)",
+                "exec": [
+                  "if (environment.cbJwsHeaders !== undefined) expect(environment.cbJwsHeaders).to.equal('VALID')"
+                ]
+              },
+              {
+                "id": "cb-source",
+                "description": "FSPIOP-Source is the DFSP under test",
+                "exec": [
+                  "const h = (n) => { const k = Object.keys(callback.headers || {}).find((x) => x.toLowerCase() === n); return k ? callback.headers[k] : undefined };",
+                  "expect(h('fspiop-source')).to.equal('{$inputs.DFSP_ID}')"
+                ]
+              },
+              {
+                "id": "cb-destination",
+                "description": "FSPIOP-Destination is the requesting participant",
+                "exec": [
+                  "const h = (n) => { const k = Object.keys(callback.headers || {}).find((x) => x.toLowerCase() === n); return k ? callback.headers[k] : undefined };",
+                  "expect(h('fspiop-destination')).to.equal('{$inputs.TTK_FSP_ID}')"
+                ]
+              },
+              {
+                "id": "cb-txid-echo",
+                "description": "The quote id is echoed",
+                "exec": [
+                  "expect(callback.body.CdtTrfTxInf.PmtId.TxId).to.equal('{$prev.Send-quote.request.body.CdtTrfTxInf.PmtId.TxId}')"
+                ]
+              },
+              {
+                "id": "cb-ilp-packet",
+                "description": "An ILP packet is returned, well formed and unexpired",
+                "exec": [
+                  "function parseIlp(p){",
+                  "  const b=Buffer.from(p.replace(/-/g,'+').replace(/_/g,'/'),'base64'); let o=0;",
+                  "  if(b[o++]!==12) throw new Error('not an ILPv4 Prepare packet (type '+b[o-1]+')');",
+                  "  const rl=(()=>{const f=b[o++]; if(f<128) return f; const n=f&127; let v=0; for(let i=0;i<n;i++) v=v*256+b[o++]; return v})();",
+                  "  const amount=b.readBigUInt64BE(o).toString(); o+=8;",
+                  "  const expiresAt=b.slice(o,o+17).toString('ascii'); o+=17;",
+                  "  const condition=b.slice(o,o+32).toString('base64').replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,''); o+=32;",
+                  "  const vs=()=>{const f=b[o++]; let n=f; if(f>=128){const k=f&127; n=0; for(let i=0;i<k;i++) n=n*256+b[o++]}; const s=b.slice(o,o+n); o+=n; return s};",
+                  "  const destination=vs().toString('ascii'); const data=vs();",
+                  "  return {amount,expiresAt,condition,destination,data};",
+                  "}",
+                  "const p = parseIlp(callback.body.CdtTrfTxInf.VrfctnOfTerms.IlpV4PrepPacket)",
+                  "expect(p.condition).to.have.lengthOf(43)",
+                  "const t = p.expiresAt",
+                  "const exp = Date.UTC(+t.slice(0,4), +t.slice(4,6)-1, +t.slice(6,8), +t.slice(8,10), +t.slice(10,12), +t.slice(12,14), +t.slice(14,17))",
+                  "expect(exp).to.be.above(Date.now())"
+                ]
+              }
+            ]
+          },
+          "params": {
+            "ID": "{$prev.Send-quote.request.body.CdtTrfTxInf.PmtId.TxId}"
+          },
+          "scriptingEngine": "javascript",
+          "scripts": {
+            "preRequest": {
+              "exec": [
+                ""
+              ]
+            },
+            "postRequest": {
+              "exec": [
+                "const cert = `{$inputs.DFSP_JWS_PUBLIC_KEY}`",
+                "const lc = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [k.toLowerCase(), v]))",
+                "environment.cbJws = undefined",
+                "environment.cbJwsHeaders = undefined",
+                "if (callback && callback.headers && cert.indexOf('BEGIN') >= 0) { environment.cbJws = custom.jws.validateCallback(lc(callback.headers), callback.body, cert); environment.cbJwsHeaders = custom.jws.validateCallbackProtectedHeaders(lc(callback.headers)) }"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "DI-INC-10",
+      "name": "DI-INC-10 Successful transfer",
+      "meta": {
+        "info": "DI-INC-10 Successful transfer"
+      },
+      "requests": [
+        {
+          "id": "Send-quote",
+          "description": "Request a quote",
+          "apiVersion": {
+            "minorVersion": 0,
+            "majorVersion": 2,
+            "type": "iso20022",
+            "asynchronous": true
+          },
+          "url": "{$inputs.HUB_FSPIOP_URL}",
+          "operationPath": "/quotes",
+          "method": "post",
+          "headers": {
+            "Accept": "application/vnd.interoperability.iso20022.quotes+json;version=2.0",
+            "Content-Type": "application/vnd.interoperability.iso20022.quotes+json;version=2.0",
+            "Date": "{$function.generic.curDate}",
+            "FSPIOP-Source": "{$inputs.TTK_FSP_ID}",
+            "FSPIOP-Destination": "{$inputs.DFSP_ID}"
+          },
+          "tests": {
+            "assertions": [
+              {
+                "id": "rsp-202",
+                "description": "202",
+                "exec": [
+                  "expect(response.status).to.equal(202)"
+                ]
+              }
+            ]
+          },
+          "body": {
+            "GrpHdr": {
+              "MsgId": "{$function.generic.generateULID}",
+              "CreDtTm": "{$function.generic.curDateISO}",
+              "PmtInstrXpryDtTm": "{$environment.EXPIRY}",
+              "NbOfTxs": "1",
+              "SttlmInf": {
+                "SttlmMtd": "CLRG"
+              }
+            },
+            "CdtTrfTxInf": {
+              "PmtId": {
+                "TxId": "{$function.generic.generateULID}",
+                "EndToEndId": "{$function.generic.generateULID}"
+              },
+              "IntrBkSttlmAmt": {
+                "Ccy": "{$inputs.CURRENCY}",
+                "ActiveCurrencyAndAmount": "{$inputs.AMOUNT}"
+              },
+              "ChrgBr": "SHAR",
+              "Purp": {
+                "Prtry": "TRANSFER"
+              },
+              "Dbtr": {
+                "Nm": "{$inputs.PAYER_NAME}",
+                "Id": {
+                  "PrvtId": {
+                    "Othr": {
+                      "Id": "{$inputs.PAYER_ID}",
+                      "SchmeNm": {
+                        "Prtry": "{$inputs.LOOKUP_ID_TYPE}"
+                      }
+                    }
+                  }
+                }
+              },
+              "DbtrAgt": {
+                "FinInstnId": {
+                  "Othr": {
+                    "Id": "{$inputs.TTK_FSP_ID}"
+                  }
+                }
+              },
+              "Cdtr": {
+                "Nm": "{$inputs.PAYEE_NAME}",
+                "Id": {
+                  "PrvtId": {
+                    "Othr": {
+                      "Id": "{$inputs.PAYEE_ID}",
+                      "SchmeNm": {
+                        "Prtry": "{$inputs.LOOKUP_ID_TYPE}"
+                      }
+                    }
+                  }
+                }
+              },
+              "CdtrAgt": {
+                "FinInstnId": {
+                  "Othr": {
+                    "Id": "{$inputs.DFSP_ID}"
+                  }
+                }
+              }
+            }
+          },
+          "scriptingEngine": "javascript",
+          "scripts": {
+            "preRequest": {
+              "exec": [
+                "environment.EXPIRY = new Date(Date.now() + 300000).toISOString()"
+              ]
+            },
+            "postRequest": {
+              "exec": [
+                "const cert = `{$inputs.DFSP_JWS_PUBLIC_KEY}`",
+                "const lc = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [k.toLowerCase(), v]))",
+                "environment.cbJws = undefined",
+                "environment.cbJwsHeaders = undefined",
+                "if (callback && callback.headers && cert.indexOf('BEGIN') >= 0) { environment.cbJws = custom.jws.validateCallback(lc(callback.headers), callback.body, cert); environment.cbJwsHeaders = custom.jws.validateCallbackProtectedHeaders(lc(callback.headers)) }"
+              ]
+            }
+          }
+        },
+        {
+          "id": "Send-transfer",
+          "description": "Send the transfer",
+          "apiVersion": {
+            "minorVersion": 0,
+            "majorVersion": 2,
+            "type": "iso20022",
+            "asynchronous": true
+          },
+          "url": "{$inputs.HUB_FSPIOP_URL}",
+          "operationPath": "/transfers",
+          "method": "post",
+          "headers": {
+            "Accept": "application/vnd.interoperability.iso20022.transfers+json;version=2.0",
+            "Content-Type": "application/vnd.interoperability.iso20022.transfers+json;version=2.0",
+            "Date": "{$function.generic.curDate}",
+            "FSPIOP-Source": "{$inputs.TTK_FSP_ID}",
+            "FSPIOP-Destination": "{$inputs.DFSP_ID}"
+          },
+          "tests": {
+            "assertions": [
+              {
+                "id": "rsp-202",
+                "description": "The hub accepts the request with 202",
+                "exec": [
+                  "expect(response.status).to.equal(202)"
+                ]
+              },
+              {
+                "id": "cb-received",
+                "description": "A callback is received",
+                "exec": [
+                  "expect(callback).to.be.an('object')",
+                  "expect(callback.body).to.be.an('object')"
+                ]
+              },
+              {
+                "id": "cb-content-type",
+                "description": "Callback content type is the ISO 20022 type for the resource, version 2.0",
+                "exec": [
+                  "const h = (n) => { const k = Object.keys(callback.headers || {}).find((x) => x.toLowerCase() === n); return k ? callback.headers[k] : undefined };",
+                  "expect(h('content-type')).to.match(/^application\\/vnd\\.interoperability\\.iso20022\\.transfers\\+json;\\s?version=2\\.0$/)"
+                ]
+              },
+              {
+                "id": "cb-jws",
+                "description": "The callback signature validates with the DFSP's published key (checked when DFSP_JWS_PUBLIC_KEY is set)",
+                "exec": [
+                  "if (environment.cbJws !== undefined) expect(environment.cbJws).to.equal('VALID')"
+                ]
+              },
+              {
+                "id": "cb-jws-protected-header",
+                "description": "The signature's protected header is complete and matches the callback's headers (checked when DFSP_JWS_PUBLIC_KEY is set)",
+                "exec": [
+                  "if (environment.cbJwsHeaders !== undefined) expect(environment.cbJwsHeaders).to.equal('VALID')"
+                ]
+              },
+              {
+                "id": "cb-source",
+                "description": "FSPIOP-Source is the DFSP under test",
+                "exec": [
+                  "const h = (n) => { const k = Object.keys(callback.headers || {}).find((x) => x.toLowerCase() === n); return k ? callback.headers[k] : undefined };",
+                  "expect(h('fspiop-source')).to.equal('{$inputs.DFSP_ID}')"
+                ]
+              },
+              {
+                "id": "cb-destination",
+                "description": "FSPIOP-Destination is the requesting participant",
+                "exec": [
+                  "const h = (n) => { const k = Object.keys(callback.headers || {}).find((x) => x.toLowerCase() === n); return k ? callback.headers[k] : undefined };",
+                  "expect(h('fspiop-destination')).to.equal('{$inputs.TTK_FSP_ID}')"
+                ]
+              },
+              {
+                "id": "cb-state",
+                "description": "The state is COMM or RESV",
+                "exec": [
+                  "expect(callback.body.TxInfAndSts.TxSts).to.be.oneOf(['COMM', 'RESV'])"
+                ]
+              },
+              {
+                "id": "cb-fulfilment-matches-condition",
+                "description": "SHA-256 of the fulfilment equals the condition in the transfer's ILP packet",
+                "exec": [
+                  "function parseIlp(p){",
+                  "  const b=Buffer.from(p.replace(/-/g,'+').replace(/_/g,'/'),'base64'); let o=0;",
+                  "  if(b[o++]!==12) throw new Error('not an ILPv4 Prepare packet (type '+b[o-1]+')');",
+                  "  const rl=(()=>{const f=b[o++]; if(f<128) return f; const n=f&127; let v=0; for(let i=0;i<n;i++) v=v*256+b[o++]; return v})();",
+                  "  const amount=b.readBigUInt64BE(o).toString(); o+=8;",
+                  "  const expiresAt=b.slice(o,o+17).toString('ascii'); o+=17;",
+                  "  const condition=b.slice(o,o+32).toString('base64').replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,''); o+=32;",
+                  "  const vs=()=>{const f=b[o++]; let n=f; if(f>=128){const k=f&127; n=0; for(let i=0;i<k;i++) n=n*256+b[o++]}; const s=b.slice(o,o+n); o+=n; return s};",
+                  "  const destination=vs().toString('ascii'); const data=vs();",
+                  "  return {amount,expiresAt,condition,destination,data};",
+                  "}",
+                  "const crypto = require('crypto')",
+                  "const f = callback.body.TxInfAndSts.ExctnConf",
+                  "const preimage = Buffer.from(f.replace(/-/g, '+').replace(/_/g, '/'), 'base64')",
+                  "expect(preimage.length).to.equal(32)",
+                  "const cond = crypto.createHash('sha256').update(preimage).digest('base64').replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '')",
+                  "expect(cond).to.equal(parseIlp(request.body.CdtTrfTxInf.VrfctnOfTerms.IlpV4PrepPacket).condition)"
+                ]
+              },
+              {
+                "id": "cb-completion-time",
+                "description": "The completion time is no more than 200 ms ahead and no more than 300 s behind",
+                "exec": [
+                  "const t = new Date(callback.body.TxInfAndSts.PrcgDt.DtTm).getTime()",
+                  "expect(t).to.be.below(Date.now() + 200)",
+                  "expect(t).to.be.above(Date.now() - 300000)"
+                ]
+              }
+            ]
+          },
+          "body": {
+            "GrpHdr": {
+              "MsgId": "{$function.generic.generateULID}",
+              "CreDtTm": "{$function.generic.curDateISO}",
+              "PmtInstrXpryDtTm": "{$environment.EXPIRY}",
+              "NbOfTxs": "1",
+              "SttlmInf": {
+                "SttlmMtd": "CLRG"
+              }
+            },
+            "CdtTrfTxInf": {
+              "PmtId": {
+                "TxId": "{$function.generic.generateULID}",
+                "EndToEndId": "{$function.generic.generateULID}"
+              },
+              "IntrBkSttlmAmt": {
+                "Ccy": "{$inputs.CURRENCY}",
+                "ActiveCurrencyAndAmount": "{$prev.Send-quote.callback.body.CdtTrfTxInf.IntrBkSttlmAmt.ActiveCurrencyAndAmount}"
+              },
+              "ChrgBr": "SHAR",
+              "Dbtr": {
+                "Nm": "{$inputs.PAYER_NAME}",
+                "Id": {
+                  "PrvtId": {
+                    "Othr": {
+                      "Id": "{$inputs.PAYER_ID}",
+                      "SchmeNm": {
+                        "Prtry": "{$inputs.LOOKUP_ID_TYPE}"
+                      }
+                    }
+                  }
+                }
+              },
+              "DbtrAgt": {
+                "FinInstnId": {
+                  "Othr": {
+                    "Id": "{$inputs.TTK_FSP_ID}"
+                  }
+                }
+              },
+              "Cdtr": {
+                "Nm": "{$inputs.PAYEE_NAME}",
+                "Id": {
+                  "PrvtId": {
+                    "Othr": {
+                      "Id": "{$inputs.PAYEE_ID}",
+                      "SchmeNm": {
+                        "Prtry": "{$inputs.LOOKUP_ID_TYPE}"
+                      }
+                    }
+                  }
+                }
+              },
+              "CdtrAgt": {
+                "FinInstnId": {
+                  "Othr": {
+                    "Id": "{$inputs.DFSP_ID}"
+                  }
+                }
+              },
+              "VrfctnOfTerms": {
+                "IlpV4PrepPacket": "{$prev.Send-quote.callback.body.CdtTrfTxInf.VrfctnOfTerms.IlpV4PrepPacket}"
+              }
+            }
+          },
+          "scriptingEngine": "javascript",
+          "scripts": {
+            "preRequest": {
+              "exec": [
+                "environment.EXPIRY = new Date(Date.now() + 300000).toISOString()"
+              ]
+            },
+            "postRequest": {
+              "exec": [
+                "const cert = `{$inputs.DFSP_JWS_PUBLIC_KEY}`",
+                "const lc = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [k.toLowerCase(), v]))",
+                "environment.cbJws = undefined",
+                "environment.cbJwsHeaders = undefined",
+                "if (callback && callback.headers && cert.indexOf('BEGIN') >= 0) { environment.cbJws = custom.jws.validateCallback(lc(callback.headers), callback.body, cert); environment.cbJwsHeaders = custom.jws.validateCallbackProtectedHeaders(lc(callback.headers)) }"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "DI-INC-12",
+      "name": "DI-INC-12 Transfer that differs from its quote is rejected",
+      "meta": {
+        "info": "DI-INC-12 Transfer that differs from its quote is rejected"
+      },
+      "requests": [
+        {
+          "id": "Send-quote",
+          "description": "Request a quote",
+          "apiVersion": {
+            "minorVersion": 0,
+            "majorVersion": 2,
+            "type": "iso20022",
+            "asynchronous": true
+          },
+          "url": "{$inputs.HUB_FSPIOP_URL}",
+          "operationPath": "/quotes",
+          "method": "post",
+          "headers": {
+            "Accept": "application/vnd.interoperability.iso20022.quotes+json;version=2.0",
+            "Content-Type": "application/vnd.interoperability.iso20022.quotes+json;version=2.0",
+            "Date": "{$function.generic.curDate}",
+            "FSPIOP-Source": "{$inputs.TTK_FSP_ID}",
+            "FSPIOP-Destination": "{$inputs.DFSP_ID}"
+          },
+          "tests": {
+            "assertions": [
+              {
+                "id": "rsp-202",
+                "description": "202",
+                "exec": [
+                  "expect(response.status).to.equal(202)"
+                ]
+              }
+            ]
+          },
+          "body": {
+            "GrpHdr": {
+              "MsgId": "{$function.generic.generateULID}",
+              "CreDtTm": "{$function.generic.curDateISO}",
+              "PmtInstrXpryDtTm": "{$environment.EXPIRY}",
+              "NbOfTxs": "1",
+              "SttlmInf": {
+                "SttlmMtd": "CLRG"
+              }
+            },
+            "CdtTrfTxInf": {
+              "PmtId": {
+                "TxId": "{$function.generic.generateULID}",
+                "EndToEndId": "{$function.generic.generateULID}"
+              },
+              "IntrBkSttlmAmt": {
+                "Ccy": "{$inputs.CURRENCY}",
+                "ActiveCurrencyAndAmount": "{$inputs.AMOUNT}"
+              },
+              "ChrgBr": "SHAR",
+              "Purp": {
+                "Prtry": "TRANSFER"
+              },
+              "Dbtr": {
+                "Nm": "{$inputs.PAYER_NAME}",
+                "Id": {
+                  "PrvtId": {
+                    "Othr": {
+                      "Id": "{$inputs.PAYER_ID}",
+                      "SchmeNm": {
+                        "Prtry": "{$inputs.LOOKUP_ID_TYPE}"
+                      }
+                    }
+                  }
+                }
+              },
+              "DbtrAgt": {
+                "FinInstnId": {
+                  "Othr": {
+                    "Id": "{$inputs.TTK_FSP_ID}"
+                  }
+                }
+              },
+              "Cdtr": {
+                "Nm": "{$inputs.PAYEE_NAME}",
+                "Id": {
+                  "PrvtId": {
+                    "Othr": {
+                      "Id": "{$inputs.PAYEE_ID}",
+                      "SchmeNm": {
+                        "Prtry": "{$inputs.LOOKUP_ID_TYPE}"
+                      }
+                    }
+                  }
+                }
+              },
+              "CdtrAgt": {
+                "FinInstnId": {
+                  "Othr": {
+                    "Id": "{$inputs.DFSP_ID}"
+                  }
+                }
+              }
+            }
+          },
+          "scriptingEngine": "javascript",
+          "scripts": {
+            "preRequest": {
+              "exec": [
+                "environment.EXPIRY = new Date(Date.now() + 300000).toISOString()"
+              ]
+            },
+            "postRequest": {
+              "exec": [
+                "const cert = `{$inputs.DFSP_JWS_PUBLIC_KEY}`",
+                "const lc = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [k.toLowerCase(), v]))",
+                "environment.cbJws = undefined",
+                "environment.cbJwsHeaders = undefined",
+                "if (callback && callback.headers && cert.indexOf('BEGIN') >= 0) { environment.cbJws = custom.jws.validateCallback(lc(callback.headers), callback.body, cert); environment.cbJwsHeaders = custom.jws.validateCallbackProtectedHeaders(lc(callback.headers)) }"
+              ]
+            }
+          }
+        },
+        {
+          "id": "Send-transfer",
+          "description": "Send a transfer with a different amount from the quote",
+          "apiVersion": {
+            "minorVersion": 0,
+            "majorVersion": 2,
+            "type": "iso20022",
+            "asynchronous": true
+          },
+          "url": "{$inputs.HUB_FSPIOP_URL}",
+          "operationPath": "/transfers",
+          "method": "post",
+          "headers": {
+            "Accept": "application/vnd.interoperability.iso20022.transfers+json;version=2.0",
+            "Content-Type": "application/vnd.interoperability.iso20022.transfers+json;version=2.0",
+            "Date": "{$function.generic.curDate}",
+            "FSPIOP-Source": "{$inputs.TTK_FSP_ID}",
+            "FSPIOP-Destination": "{$inputs.DFSP_ID}"
+          },
+          "tests": {
+            "assertions": [
+              {
+                "id": "rsp-202",
+                "description": "The hub accepts the request with 202",
+                "exec": [
+                  "expect(response.status).to.equal(202)"
+                ]
+              },
+              {
+                "id": "cb-received",
+                "description": "A callback is received",
+                "exec": [
+                  "expect(callback).to.be.an('object')",
+                  "expect(callback.body).to.be.an('object')"
+                ]
+              },
+              {
+                "id": "cb-content-type",
+                "description": "Callback content type is the ISO 20022 type for the resource, version 2.0",
+                "exec": [
+                  "const h = (n) => { const k = Object.keys(callback.headers || {}).find((x) => x.toLowerCase() === n); return k ? callback.headers[k] : undefined };",
+                  "expect(h('content-type')).to.match(/^application\\/vnd\\.interoperability\\.iso20022\\.transfers\\+json;\\s?version=2\\.0$/)"
+                ]
+              },
+              {
+                "id": "cb-jws",
+                "description": "The callback signature validates with the DFSP's published key (checked when DFSP_JWS_PUBLIC_KEY is set)",
+                "exec": [
+                  "if (environment.cbJws !== undefined) expect(environment.cbJws).to.equal('VALID')"
+                ]
+              },
+              {
+                "id": "cb-jws-protected-header",
+                "description": "The signature's protected header is complete and matches the callback's headers (checked when DFSP_JWS_PUBLIC_KEY is set)",
+                "exec": [
+                  "if (environment.cbJwsHeaders !== undefined) expect(environment.cbJwsHeaders).to.equal('VALID')"
+                ]
+              },
+              {
+                "id": "cb-source",
+                "description": "FSPIOP-Source is the DFSP under test",
+                "exec": [
+                  "const h = (n) => { const k = Object.keys(callback.headers || {}).find((x) => x.toLowerCase() === n); return k ? callback.headers[k] : undefined };",
+                  "expect(h('fspiop-source')).to.equal('{$inputs.DFSP_ID}')"
+                ]
+              },
+              {
+                "id": "cb-destination",
+                "description": "FSPIOP-Destination is the requesting participant",
+                "exec": [
+                  "const h = (n) => { const k = Object.keys(callback.headers || {}).find((x) => x.toLowerCase() === n); return k ? callback.headers[k] : undefined };",
+                  "expect(h('fspiop-destination')).to.equal('{$inputs.TTK_FSP_ID}')"
+                ]
+              },
+              {
+                "id": "cb-rejected",
+                "description": "The DFSP returns an error, not a fulfilment",
+                "exec": [
+                  "expect(callback.body.TxInfAndSts.ExctnConf).to.equal(undefined)",
+                  "expect(callback.body.TxInfAndSts.StsRsnInf.Rsn.Prtry).to.match(/^[0-9]{4}$/)"
+                ]
+              }
+            ]
+          },
+          "body": {
+            "GrpHdr": {
+              "MsgId": "{$function.generic.generateULID}",
+              "CreDtTm": "{$function.generic.curDateISO}",
+              "PmtInstrXpryDtTm": "{$environment.EXPIRY}",
+              "NbOfTxs": "1",
+              "SttlmInf": {
+                "SttlmMtd": "CLRG"
+              }
+            },
+            "CdtTrfTxInf": {
+              "PmtId": {
+                "TxId": "{$function.generic.generateULID}",
+                "EndToEndId": "{$function.generic.generateULID}"
+              },
+              "IntrBkSttlmAmt": {
+                "Ccy": "{$inputs.CURRENCY}",
+                "ActiveCurrencyAndAmount": "{$inputs.MISMATCH_AMOUNT}"
+              },
+              "ChrgBr": "SHAR",
+              "Dbtr": {
+                "Nm": "{$inputs.PAYER_NAME}",
+                "Id": {
+                  "PrvtId": {
+                    "Othr": {
+                      "Id": "{$inputs.PAYER_ID}",
+                      "SchmeNm": {
+                        "Prtry": "{$inputs.LOOKUP_ID_TYPE}"
+                      }
+                    }
+                  }
+                }
+              },
+              "DbtrAgt": {
+                "FinInstnId": {
+                  "Othr": {
+                    "Id": "{$inputs.TTK_FSP_ID}"
+                  }
+                }
+              },
+              "Cdtr": {
+                "Nm": "{$inputs.PAYEE_NAME}",
+                "Id": {
+                  "PrvtId": {
+                    "Othr": {
+                      "Id": "{$inputs.PAYEE_ID}",
+                      "SchmeNm": {
+                        "Prtry": "{$inputs.LOOKUP_ID_TYPE}"
+                      }
+                    }
+                  }
+                }
+              },
+              "CdtrAgt": {
+                "FinInstnId": {
+                  "Othr": {
+                    "Id": "{$inputs.DFSP_ID}"
+                  }
+                }
+              },
+              "VrfctnOfTerms": {
+                "IlpV4PrepPacket": "{$prev.Send-quote.callback.body.CdtTrfTxInf.VrfctnOfTerms.IlpV4PrepPacket}"
+              }
+            }
+          },
+          "scriptingEngine": "javascript",
+          "scripts": {
+            "preRequest": {
+              "exec": [
+                "environment.EXPIRY = new Date(Date.now() + 300000).toISOString()"
+              ]
+            },
+            "postRequest": {
+              "exec": [
+                "const cert = `{$inputs.DFSP_JWS_PUBLIC_KEY}`",
+                "const lc = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [k.toLowerCase(), v]))",
+                "environment.cbJws = undefined",
+                "environment.cbJwsHeaders = undefined",
+                "if (callback && callback.headers && cert.indexOf('BEGIN') >= 0) { environment.cbJws = custom.jws.validateCallback(lc(callback.headers), callback.body, cert); environment.cbJwsHeaders = custom.jws.validateCallbackProtectedHeaders(lc(callback.headers)) }"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
