@@ -17,6 +17,7 @@ It needs `bash`, `curl`, `jq` and `openssl`.
 | `FSPIOP_HOST` | No | The switch FSPIOP host. With `CLIENT_CERT` and `CLIENT_KEY`, enables `DI-SEC-04` |
 | `CLIENT_CERT`, `CLIENT_KEY` | No | Your client certificate and its key |
 | `MIN_KEY_BITS` | No | Minimum JWS key length. Default 2048 |
+| `HUB_ID` | No | The id of the hub's entry in `GET /dfsps/jwscerts`. Default `Hub` |
 
 ## Use
 
@@ -39,11 +40,11 @@ Each line is `PASS`, `FAIL` or `SKIP`, with the case id. The exit status is 0 wh
 | `DI-ONB-02` | `GET /dfsps/{id}/ca` | `validationState` is `VALID` and the root is a CA certificate |
 | `DI-ONB-03` | `GET /dfsps/{id}/servercerts` | `VALID`, chains to the CA, and names `CALLBACK_HOST` |
 | `DI-ONB-04` | `GET /dfsps/{id}/jwscerts`, `GET /dfsps/jwscerts` | An RSA public key of the minimum length, listed for the DFSP |
-| `DI-ONB-05` | `GET /dfsps/{id}/endpoints` | An ingress URL is registered |
+| `DI-ONB-05` | `GET /dfsps/{id}/endpoints`, `GET /dfsps/{id}/endpoints/egress` | An ingress URL is registered, and at least one egress address |
 | `DI-ONB-06` | `GET /dfsps/{id}/enrollments/outbound` | The hub's request is `CERT_SIGNED` and was issued by the DFSP CA |
 | `DI-ONB-07` | `GET /dfsps/{id}/enrollments/inbound` | A request was submitted and is not `INVALID` |
 | `DI-ONB-08` | `GET /dfsps/{id}/enrollments/inbound` | The client certificate is `CERT_SIGNED` and has not expired |
-| `DI-ONB-09` | `GET /hub/ca` | The hub CA is available. The check prints its fingerprint for you to compare |
+| `DI-ONB-09` | `GET /hub/ca`, `GET /dfsps/jwscerts` | The hub CA is available (the check prints its fingerprint for you to compare), and the hub's JWS key is listed as `Hub` |
 | `DI-SEC-02` | TLS to the callback host | A client with no certificate is refused |
 | `DI-SEC-03` | TLS to the callback host | The certificate presented is issued by the DFSP CA and names the host |
 | `DI-SEC-04` | TLS to the switch | Your certificate is accepted and a client without one is refused |

@@ -11,7 +11,7 @@ The hub's API is ISO 20022 for party lookup, quotes and transfers. Other resourc
 | [onboarding.md](onboarding.md) | The certificates and keys to create, the MCM calls to make, and the hub operator's steps |
 | [clearing-behaviour.md](clearing-behaviour.md) | How a payment clears, and every message: API path, schema, links to the real payloads, and the rules |
 | [field-reference.md](field-reference.md) | Every element of every ISO 20022 message, and how the hub reads it. Generated from the API definition |
-| [hub-requests.md](hub-requests.md) | What to ask the hub operator for, and what the hub operator does |
+| [hub-requests.md](hub-requests.md) | The hand-over sheet: what the hub operator sends, where each value comes from, and what the hub operator does |
 | [register.md](register.md) | The test cases, how each is checked, and the behaviour it covers |
 | [evidence/evidence-pack.md](evidence/evidence-pack.md) | The template for recording a run |
 | [onboarding-checks](onboarding-checks) | A script that checks onboarding by reading MCM |
@@ -20,7 +20,7 @@ The hub's API is ISO 20022 for party lookup, quotes and transfers. Other resourc
 
 ## Using these resources
 
-1. Send the first table in [hub-requests.md](hub-requests.md) to the hub operator.
+1. Ask the hub operator for the filled hand-over sheet ([hub-requests.md](hub-requests.md)). Check that its API type is `iso20022`.
 2. Implement onboarding as described in [onboarding.md](onboarding.md), and check each step.
 3. Implement the message handling in [clearing-behaviour.md](clearing-behaviour.md). Use the API viewer links in it to see real payloads, and [field-reference.md](field-reference.md) for every element.
 4. Run [onboarding-checks/check-onboarding.sh](onboarding-checks/check-onboarding.sh) and keep its output.

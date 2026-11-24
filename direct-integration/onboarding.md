@@ -20,7 +20,7 @@ Messages are also signed at application level (JWS). You create a signing key, p
 
 ## 2. What you need from the hub operator
 
-Ask for each of these before starting. The full list, with what the hub does in return, is in [hub-requests.md](hub-requests.md).
+The hub operator sends these in one sheet, [hub-requests.md](hub-requests.md), which also says what the hub does in return and what you give the hub operator.
 
 | Item | Used for |
 |---|---|
@@ -29,8 +29,7 @@ Ask for each of these before starting. The full list, with what the hub does in 
 | The Keycloak token URL (realm) | Getting a token |
 | The MCM API base URL for DFSPs | All onboarding calls |
 | The switch FSPIOP host | Your payment traffic |
-| The API type (`iso20022`) and settlement currency | Message format and the currencies you can use |
-| The hub's JWS public key | Validating messages the hub originates |
+| The API type of the environment, and your settlement currency | Message format and the currencies you can use. These documents apply when the API type is `iso20022` |
 
 On the sandbox the pattern is: token URL `https://keycloak.<switch domain>/realms/dfsps/protocol/openid-connect/token`, MCM base `https://mcm.<switch domain>/pm4mlapi`, FSPIOP host `https://fspiop.<switch domain>`. The realm name and paths are the hub operator's choice. Confirm them.
 
@@ -75,12 +74,12 @@ Paths are relative to the MCM base URL. Bodies are JSON. "Hub" steps are done by
 | 2 | DFSP | Upload your CA root | `POST /dfsps/{dfspId}/ca` |
 | 3 | DFSP | Upload your callback server certificate | `POST /dfsps/{dfspId}/servercerts` |
 | 4 | DFSP | Upload your JWS public key | `POST /dfsps/{dfspId}/jwscerts` |
-| 5 | DFSP | Register your callback URL | `POST /dfsps/{dfspId}/endpoints/ingress` |
+| 5 | DFSP | Register your callback URL and your egress addresses | `POST /dfsps/{dfspId}/endpoints/ingress`, `POST /dfsps/{dfspId}/endpoints/egress` |
 | 6 | DFSP | Sign the hub's client certificate request and return the certificate | `GET /dfsps/{dfspId}/enrollments/outbound`, then `POST …/outbound/{enId}/certificate` |
 | 7 | DFSP | Submit your client certificate request | `POST /dfsps/{dfspId}/enrollments/inbound` |
 | 8 | Hub | Signs your request in MCM | MCM UI |
 | 9 | DFSP | Collect your signed client certificate | `GET /dfsps/{dfspId}/enrollments/inbound/{enId}` |
-| 10 | DFSP | Fetch the hub CA and the participants' JWS keys, and keep them current | `GET /hub/ca`, `GET /dfsps/jwscerts` |
+| 10 | DFSP | Fetch the hub CA and the JWS keys of the participants and of the hub, and keep them current | `GET /hub/ca`, `GET /dfsps/jwscerts` |
 | 11 | Hub | Checks your callbacks are registered, then activates, funds and sets limits for your participant | Finance portal |
 
 ### Step 2: DFSP CA
@@ -110,16 +109,21 @@ POST /dfsps/{dfspId}/jwscerts
 
 Send the public key (PEM, `BEGIN PUBLIC KEY`), not a certificate. Check with `GET /dfsps/{dfspId}/jwscerts`.
 
-### Step 5: callback URL
+### Step 5: callback URL and egress addresses
 
 ```
 POST /dfsps/{dfspId}/endpoints/ingress
 { "url": "https://<callback host>/" }
+
+POST /dfsps/{dfspId}/endpoints/egress
+{ "ipList": [ { "description": "<text>", "address": "<IP or CIDR>", "ports": ["443"] } ] }
 ```
 
-The hub registers your participant's callback endpoints from this record. Do not ask the hub to add callbacks by hand. If they are missing, the URL record is missing or wrong.
+The callback URL is where the hub sends its callbacks to you. The hub registers your participant's callback endpoints from this record. Do not ask the hub to add callbacks by hand. If they are missing, the URL record is missing or wrong.
 
-Egress IP addresses: the Payment Manager also posts its egress addresses (`POST /dfsps/{dfspId}/endpoints/egress` with `{ "ipList": [ { "description": "…", "address": "<IP or CIDR>", "ports": ["443"] } ] }`). Whether a hub requires them is the hub operator's decision. Ask.
+The egress addresses are the public addresses your calls to the switch come from. **Register at least one.** The hub's onboarding builds its allow-list from them and fails when the list is empty. Send the addresses of every machine that calls the switch, and register a new one before you start using it.
+
+Check with `GET /dfsps/{dfspId}/endpoints` (the ingress URL) and `GET /dfsps/{dfspId}/endpoints/egress` (the `ipList`).
 
 ### Step 6: sign the hub's request
 
@@ -159,10 +163,10 @@ When `state` is `CERT_SIGNED` the `certificate` field holds your client certific
 
 ```
 GET /hub/ca                 the hub's root and chain: trust these for TLS to the switch
-GET /dfsps/jwscerts         every registered participant's JWS public key
+GET /dfsps/jwscerts         every registered participant's JWS public key, including the hub's (the entry `Hub`)
 ```
 
-Refresh the JWS keys regularly. A message from a participant whose key you do not hold cannot be validated. The hub's own JWS key may not appear in the list. Ask the hub operator for it.
+The list also holds the hub's own key, as the entry with `dfspId` `Hub`. The hub signs the messages it originates (callbacks, commit notices, expiry and error messages) with it, and you find it by the `FSPIOP-Source` of the message. Check that the `Hub` entry is present. Refresh the keys regularly. A message from a participant whose key you do not hold cannot be validated.
 
 ## 6. After the hub signs
 
