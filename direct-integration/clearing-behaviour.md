@@ -354,7 +354,7 @@ The combined API keeps every resource that has no ISO 20022 representation in it
 | FX service discovery | `/services/FXP`, `/services/FXP/{SourceCurrency}/{TargetCurrency}` | [line 2576](https://github.com/JengaCore/cbs-core-connector-test-harness/blob/932dd41cca79c385ef5ab00caef1977edf1f46e8/sdk-based-test-harness/config/ttk-hub/spec_files/api_definitions/fspiop_2.0_iso20022/api_spec.yaml#L2576) |
 | Ping and interface | `/ping`, `/interface` | [line 37](https://github.com/JengaCore/cbs-core-connector-test-harness/blob/932dd41cca79c385ef5ab00caef1977edf1f46e8/sdk-based-test-harness/config/ttk-hub/spec_files/api_definitions/fspiop_2.0_iso20022/api_spec.yaml#L37) |
 
-None of the flows in this document uses them. The hub's oracle is static, so a DFSP does not register customers with `/participants`. Transaction requests, authorizations, transactions, bulk and FX service discovery are out of scope. `/ping` and `/interface` are in the combined API definition, but they are not in the contracts of the hub's lookup, quoting and transfer services.
+In ISO mode the hub applies the ISO content-type pattern to `participants` as well: Mojaloop's own hub test collection sends `application/vnd.interoperability.iso20022.participants+json;version=2.0`. None of the flows in this document uses these resources. The hub's oracle is static, so a DFSP does not register customers with `/participants`. Transaction requests, authorizations, transactions, bulk and FX service discovery are out of scope. `/ping` and `/interface` are in the combined API definition, but they are not in the contracts of the hub's lookup, quoting and transfer services.
 
 ## 12. To confirm with the hub operator
 
@@ -364,7 +364,6 @@ These could not be settled from the source and must be confirmed before go-live:
 - How the ISO quote expresses whether the amount is a send amount or a receive amount.
 - Which identifier types are enabled and how they route to your DFSP.
 - The versions of the hub services that are running.
-- The content type the hub expects for `participants` in ISO mode. The hub's code applies the ISO pattern to it. It does not matter while lookups use the static oracle.
 
 ## 13. Sources
 

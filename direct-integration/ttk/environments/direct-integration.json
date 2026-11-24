@@ -1,0 +1,24 @@
+{
+  "inputValues": {
+    "HUB_FSPIOP_URL": "https://fspiop.<switch domain>",
+    "TTK_SELF_URL": "http://localhost:4040",
+    "DFSP_ID": "<the DFSP id under test>",
+    "TTK_FSP_ID": "<the testing counterparty's participant id>",
+    "CURRENCY": "<currency of the test accounts>",
+    "AMOUNT": "<amount for test payments>",
+    "LOOKUP_ID_TYPE": "MSISDN",
+    "PAYEE_ID": "<identifier of an existing customer at the DFSP>",
+    "PAYEE_NAME": "<that customer's name>",
+    "PAYER_ID": "<identifier of a customer at the testing counterparty>",
+    "PAYER_NAME": "<that customer's name>",
+    "UNSUPPORTED_ID_TYPE": "<an identifier type the DFSP does not support>",
+    "UNKNOWN_ID": "<an identifier that does not exist at the DFSP>",
+    "UNSUPPORTED_CURRENCY": "<a currency the hub has and the DFSP does not support>",
+    "OVER_LIMIT_AMOUNT": "<an amount above the DFSP's limit>",
+    "BLOCKED_ID": "<an identifier of a blocked account at the DFSP>",
+    "MISMATCH_AMOUNT": "<an amount different from AMOUNT>",
+    "OUT_WAIT_MS": "600000",
+    "OUT_QUIET_MS": "30000",
+    "DFSP_JWS_PUBLIC_KEY": "<the DFSP's JWS public key, PEM, from MCM: GET /dfsps/jwscerts. Leave empty to skip signature checks>"
+  }
+}

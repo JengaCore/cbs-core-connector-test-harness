@@ -1,0 +1,516 @@
+{
+  "name": "Direct integration: outgoing payments (the DFSP is the payer)",
+  "test_cases": [
+    {
+      "id": "DI-OUT-payment",
+      "name": "DI-OUT-01, 03 and 04: a payment started by the DFSP (lookup, quote, transfer)",
+      "meta": {
+        "info": "Start a payment from the DFSP's system when this case runs"
+      },
+      "requests": [
+        {
+          "id": "Wait-for-lookup",
+          "description": "Wait for the DFSP's lookup",
+          "apiVersion": {
+            "minorVersion": 0,
+            "majorVersion": 2,
+            "type": "iso20022",
+            "asynchronous": true
+          },
+          "url": "{$inputs.TTK_SELF_URL}",
+          "operationPath": "/parties/{Type}/{ID}",
+          "method": "get",
+          "headers": {
+            "Accept": "application/vnd.interoperability.iso20022.parties+json;version=2.0",
+            "Content-Type": "application/vnd.interoperability.iso20022.parties+json;version=2.0",
+            "Date": "{$function.generic.curDate}",
+            "FSPIOP-Source": "{$inputs.TTK_FSP_ID}",
+            "FSPIOP-Destination": "{$inputs.TTK_FSP_ID}"
+          },
+          "params": {
+            "Type": "{$inputs.LOOKUP_ID_TYPE}",
+            "ID": "ttk-wait"
+          },
+          "ignoreCallbacks": true,
+          "scriptingEngine": "javascript",
+          "scripts": {
+            "preRequest": {
+              "exec": [
+                "await inboundEvent.addListener('lookup', 'get', '/parties/{$inputs.LOOKUP_ID_TYPE}/{$inputs.PAYEE_ID}/{$inputs.TTK_FSP_ID}', null, {$inputs.OUT_WAIT_MS})"
+              ]
+            },
+            "postRequest": {
+              "exec": [
+                "environment.lookupMsg = await inboundEvent.getMessage('lookup', {$inputs.OUT_WAIT_MS})",
+                "const cert = `{$inputs.DFSP_JWS_PUBLIC_KEY}`",
+                "const lc = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [k.toLowerCase(), v]))",
+                "environment.lookupMsgJws = undefined; environment.lookupMsgJwsHeaders = undefined",
+                "if (environment.lookupMsg && cert.indexOf('BEGIN') >= 0) { environment.lookupMsgJws = custom.jws.validateCallback(lc(environment.lookupMsg.headers), environment.lookupMsg.body, cert); environment.lookupMsgJwsHeaders = custom.jws.validateCallbackProtectedHeaders(lc(environment.lookupMsg.headers)) }"
+              ]
+            }
+          },
+          "tests": {
+            "assertions": [
+              {
+                "id": "lookupMsg-received",
+                "description": "The DFSP's message arrived within the wait time",
+                "exec": [
+                  "expect(environment.lookupMsg).to.be.an('object')"
+                ]
+              },
+              {
+                "id": "lookupMsg-content-type",
+                "description": "Content type is the ISO 20022 type for the resource, version 2.0",
+                "exec": [
+                  "const m = environment.lookupMsg",
+                  "const h = (n) => { const k = Object.keys(m.headers || {}).find((x) => x.toLowerCase() === n); return k ? m.headers[k] : undefined }",
+                  "expect(h('content-type')).to.match(/^application\\/vnd\\.interoperability\\.iso20022\\.parties\\+json;\\s?version=2\\.0$/)"
+                ]
+              },
+              {
+                "id": "lookupMsg-source",
+                "description": "FSPIOP-Source is the DFSP under test",
+                "exec": [
+                  "const m = environment.lookupMsg",
+                  "const h = (n) => { const k = Object.keys(m.headers || {}).find((x) => x.toLowerCase() === n); return k ? m.headers[k] : undefined }",
+                  "expect(h('fspiop-source')).to.equal('{$inputs.DFSP_ID}')"
+                ]
+              },
+              {
+                "id": "lookupMsg-date",
+                "description": "A Date header is present",
+                "exec": [
+                  "const m = environment.lookupMsg",
+                  "const h = (n) => { const k = Object.keys(m.headers || {}).find((x) => x.toLowerCase() === n); return k ? m.headers[k] : undefined }",
+                  "expect(h('date')).to.be.a('string').that.is.not.empty"
+                ]
+              },
+              {
+                "id": "lookupMsg-jws",
+                "description": "The signature validates with the DFSP's published key (checked when DFSP_JWS_PUBLIC_KEY is set)",
+                "exec": [
+                  "if (environment.lookupMsgJws !== undefined) expect(environment.lookupMsgJws).to.equal('VALID')"
+                ]
+              },
+              {
+                "id": "lookupMsg-jws-protected-header",
+                "description": "The signature's protected header is complete and matches the message's headers (checked when DFSP_JWS_PUBLIC_KEY is set)",
+                "exec": [
+                  "if (environment.lookupMsgJwsHeaders !== undefined) expect(environment.lookupMsgJwsHeaders).to.equal('VALID')"
+                ]
+              },
+              {
+                "id": "lookupMsg-path-sub-id",
+                "description": "The lookup names the testing counterparty as the sub id",
+                "exec": [
+                  "expect(environment.lookupMsg.path).to.equal('/parties/{$inputs.LOOKUP_ID_TYPE}/{$inputs.PAYEE_ID}/{$inputs.TTK_FSP_ID}')"
+                ]
+              },
+              {
+                "id": "lookupMsg-destination",
+                "description": "FSPIOP-Destination names the testing counterparty, if present",
+                "exec": [
+                  "const m = environment.lookupMsg",
+                  "const h = (n) => { const k = Object.keys(m.headers || {}).find((x) => x.toLowerCase() === n); return k ? m.headers[k] : undefined }",
+                  "if (h('fspiop-destination') !== undefined) expect(h('fspiop-destination')).to.equal('{$inputs.TTK_FSP_ID}')"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "Wait-for-quote",
+          "description": "Wait for the DFSP's quote request",
+          "apiVersion": {
+            "minorVersion": 0,
+            "majorVersion": 2,
+            "type": "iso20022",
+            "asynchronous": true
+          },
+          "url": "{$inputs.TTK_SELF_URL}",
+          "operationPath": "/parties/{Type}/{ID}",
+          "method": "get",
+          "headers": {
+            "Accept": "application/vnd.interoperability.iso20022.parties+json;version=2.0",
+            "Content-Type": "application/vnd.interoperability.iso20022.parties+json;version=2.0",
+            "Date": "{$function.generic.curDate}",
+            "FSPIOP-Source": "{$inputs.TTK_FSP_ID}",
+            "FSPIOP-Destination": "{$inputs.TTK_FSP_ID}"
+          },
+          "params": {
+            "Type": "{$inputs.LOOKUP_ID_TYPE}",
+            "ID": "ttk-wait"
+          },
+          "ignoreCallbacks": true,
+          "scriptingEngine": "javascript",
+          "scripts": {
+            "preRequest": {
+              "exec": [
+                "await inboundEvent.addListener('quote', 'post', '/quotes', null, {$inputs.OUT_WAIT_MS})"
+              ]
+            },
+            "postRequest": {
+              "exec": [
+                "environment.quoteMsg = await inboundEvent.getMessage('quote', {$inputs.OUT_WAIT_MS})",
+                "const cert = `{$inputs.DFSP_JWS_PUBLIC_KEY}`",
+                "const lc = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [k.toLowerCase(), v]))",
+                "environment.quoteMsgJws = undefined; environment.quoteMsgJwsHeaders = undefined",
+                "if (environment.quoteMsg && cert.indexOf('BEGIN') >= 0) { environment.quoteMsgJws = custom.jws.validateCallback(lc(environment.quoteMsg.headers), environment.quoteMsg.body, cert); environment.quoteMsgJwsHeaders = custom.jws.validateCallbackProtectedHeaders(lc(environment.quoteMsg.headers)) }"
+              ]
+            }
+          },
+          "tests": {
+            "assertions": [
+              {
+                "id": "quoteMsg-received",
+                "description": "The DFSP's message arrived within the wait time",
+                "exec": [
+                  "expect(environment.quoteMsg).to.be.an('object')"
+                ]
+              },
+              {
+                "id": "quoteMsg-content-type",
+                "description": "Content type is the ISO 20022 type for the resource, version 2.0",
+                "exec": [
+                  "const m = environment.quoteMsg",
+                  "const h = (n) => { const k = Object.keys(m.headers || {}).find((x) => x.toLowerCase() === n); return k ? m.headers[k] : undefined }",
+                  "expect(h('content-type')).to.match(/^application\\/vnd\\.interoperability\\.iso20022\\.quotes\\+json;\\s?version=2\\.0$/)"
+                ]
+              },
+              {
+                "id": "quoteMsg-source",
+                "description": "FSPIOP-Source is the DFSP under test",
+                "exec": [
+                  "const m = environment.quoteMsg",
+                  "const h = (n) => { const k = Object.keys(m.headers || {}).find((x) => x.toLowerCase() === n); return k ? m.headers[k] : undefined }",
+                  "expect(h('fspiop-source')).to.equal('{$inputs.DFSP_ID}')"
+                ]
+              },
+              {
+                "id": "quoteMsg-date",
+                "description": "A Date header is present",
+                "exec": [
+                  "const m = environment.quoteMsg",
+                  "const h = (n) => { const k = Object.keys(m.headers || {}).find((x) => x.toLowerCase() === n); return k ? m.headers[k] : undefined }",
+                  "expect(h('date')).to.be.a('string').that.is.not.empty"
+                ]
+              },
+              {
+                "id": "quoteMsg-jws",
+                "description": "The signature validates with the DFSP's published key (checked when DFSP_JWS_PUBLIC_KEY is set)",
+                "exec": [
+                  "if (environment.quoteMsgJws !== undefined) expect(environment.quoteMsgJws).to.equal('VALID')"
+                ]
+              },
+              {
+                "id": "quoteMsg-jws-protected-header",
+                "description": "The signature's protected header is complete and matches the message's headers (checked when DFSP_JWS_PUBLIC_KEY is set)",
+                "exec": [
+                  "if (environment.quoteMsgJwsHeaders !== undefined) expect(environment.quoteMsgJwsHeaders).to.equal('VALID')"
+                ]
+              },
+              {
+                "id": "quoteMsg-ids",
+                "description": "The quote id, transaction id and message id are uppercase ULIDs",
+                "exec": [
+                  "const b = environment.quoteMsg.body",
+                  "expect(b.CdtTrfTxInf.PmtId.TxId).to.match(/^[0-9A-HJKMNP-TV-Z]{26}$/)",
+                  "expect(b.CdtTrfTxInf.PmtId.EndToEndId).to.match(/^[0-9A-HJKMNP-TV-Z]{26}$/)",
+                  "expect(b.GrpHdr.MsgId).to.be.a('string').that.is.not.empty"
+                ]
+              },
+              {
+                "id": "quoteMsg-amount",
+                "description": "The amount and currency are those requested",
+                "exec": [
+                  "const a = environment.quoteMsg.body.CdtTrfTxInf.IntrBkSttlmAmt",
+                  "expect(a.Ccy).to.equal('{$inputs.CURRENCY}')",
+                  "expect(Number(a.ActiveCurrencyAndAmount)).to.equal(Number('{$inputs.AMOUNT}'))"
+                ]
+              },
+              {
+                "id": "quoteMsg-parties",
+                "description": "The payer is at the DFSP under test and the payee is at the testing counterparty",
+                "exec": [
+                  "const c = environment.quoteMsg.body.CdtTrfTxInf",
+                  "expect([].concat(c.DbtrAgt.FinInstnId.Othr)[0].Id).to.equal('{$inputs.DFSP_ID}')",
+                  "expect([].concat(c.CdtrAgt.FinInstnId.Othr)[0].Id).to.equal('{$inputs.TTK_FSP_ID}')",
+                  "const p = (c.Cdtr.Id.PrvtId || c.Cdtr.Id.OrgId).Othr",
+                  "expect([].concat(p)[0].Id).to.equal('{$inputs.PAYEE_ID}')"
+                ]
+              },
+              {
+                "id": "quoteMsg-expiry",
+                "description": "The quote request carries a future expiry",
+                "exec": [
+                  "const e = environment.quoteMsg.body.GrpHdr.PmtInstrXpryDtTm",
+                  "expect(e).to.be.a('string')",
+                  "expect(new Date(e).getTime()).to.be.above(new Date(environment.quoteMsg.body.GrpHdr.CreDtTm).getTime())"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "Wait-for-transfer",
+          "description": "Wait for the DFSP's transfer",
+          "apiVersion": {
+            "minorVersion": 0,
+            "majorVersion": 2,
+            "type": "iso20022",
+            "asynchronous": true
+          },
+          "url": "{$inputs.TTK_SELF_URL}",
+          "operationPath": "/parties/{Type}/{ID}",
+          "method": "get",
+          "headers": {
+            "Accept": "application/vnd.interoperability.iso20022.parties+json;version=2.0",
+            "Content-Type": "application/vnd.interoperability.iso20022.parties+json;version=2.0",
+            "Date": "{$function.generic.curDate}",
+            "FSPIOP-Source": "{$inputs.TTK_FSP_ID}",
+            "FSPIOP-Destination": "{$inputs.TTK_FSP_ID}"
+          },
+          "params": {
+            "Type": "{$inputs.LOOKUP_ID_TYPE}",
+            "ID": "ttk-wait"
+          },
+          "ignoreCallbacks": true,
+          "scriptingEngine": "javascript",
+          "scripts": {
+            "preRequest": {
+              "exec": [
+                "await inboundEvent.addListener('transfer', 'post', '/transfers', null, {$inputs.OUT_WAIT_MS})"
+              ]
+            },
+            "postRequest": {
+              "exec": [
+                "environment.transferMsg = await inboundEvent.getMessage('transfer', {$inputs.OUT_WAIT_MS})",
+                "const cert = `{$inputs.DFSP_JWS_PUBLIC_KEY}`",
+                "const lc = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [k.toLowerCase(), v]))",
+                "environment.transferMsgJws = undefined; environment.transferMsgJwsHeaders = undefined",
+                "if (environment.transferMsg && cert.indexOf('BEGIN') >= 0) { environment.transferMsgJws = custom.jws.validateCallback(lc(environment.transferMsg.headers), environment.transferMsg.body, cert); environment.transferMsgJwsHeaders = custom.jws.validateCallbackProtectedHeaders(lc(environment.transferMsg.headers)) }"
+              ]
+            }
+          },
+          "tests": {
+            "assertions": [
+              {
+                "id": "transferMsg-received",
+                "description": "The DFSP's message arrived within the wait time",
+                "exec": [
+                  "expect(environment.transferMsg).to.be.an('object')"
+                ]
+              },
+              {
+                "id": "transferMsg-content-type",
+                "description": "Content type is the ISO 20022 type for the resource, version 2.0",
+                "exec": [
+                  "const m = environment.transferMsg",
+                  "const h = (n) => { const k = Object.keys(m.headers || {}).find((x) => x.toLowerCase() === n); return k ? m.headers[k] : undefined }",
+                  "expect(h('content-type')).to.match(/^application\\/vnd\\.interoperability\\.iso20022\\.transfers\\+json;\\s?version=2\\.0$/)"
+                ]
+              },
+              {
+                "id": "transferMsg-source",
+                "description": "FSPIOP-Source is the DFSP under test",
+                "exec": [
+                  "const m = environment.transferMsg",
+                  "const h = (n) => { const k = Object.keys(m.headers || {}).find((x) => x.toLowerCase() === n); return k ? m.headers[k] : undefined }",
+                  "expect(h('fspiop-source')).to.equal('{$inputs.DFSP_ID}')"
+                ]
+              },
+              {
+                "id": "transferMsg-date",
+                "description": "A Date header is present",
+                "exec": [
+                  "const m = environment.transferMsg",
+                  "const h = (n) => { const k = Object.keys(m.headers || {}).find((x) => x.toLowerCase() === n); return k ? m.headers[k] : undefined }",
+                  "expect(h('date')).to.be.a('string').that.is.not.empty"
+                ]
+              },
+              {
+                "id": "transferMsg-jws",
+                "description": "The signature validates with the DFSP's published key (checked when DFSP_JWS_PUBLIC_KEY is set)",
+                "exec": [
+                  "if (environment.transferMsgJws !== undefined) expect(environment.transferMsgJws).to.equal('VALID')"
+                ]
+              },
+              {
+                "id": "transferMsg-jws-protected-header",
+                "description": "The signature's protected header is complete and matches the message's headers (checked when DFSP_JWS_PUBLIC_KEY is set)",
+                "exec": [
+                  "if (environment.transferMsgJwsHeaders !== undefined) expect(environment.transferMsgJwsHeaders).to.equal('VALID')"
+                ]
+              },
+              {
+                "id": "transferMsg-id",
+                "description": "The transfer id is an uppercase ULID",
+                "exec": [
+                  "expect(environment.transferMsg.body.CdtTrfTxInf.PmtId.TxId).to.match(/^[0-9A-HJKMNP-TV-Z]{26}$/)"
+                ]
+              },
+              {
+                "id": "transferMsg-amount",
+                "description": "The amount equals the amount quoted",
+                "exec": [
+                  "const a = environment.transferMsg.body.CdtTrfTxInf.IntrBkSttlmAmt",
+                  "const q = environment.quoteMsg.body.CdtTrfTxInf.IntrBkSttlmAmt",
+                  "expect(a.Ccy).to.equal(q.Ccy)",
+                  "expect(Number(a.ActiveCurrencyAndAmount)).to.equal(Number(q.ActiveCurrencyAndAmount))"
+                ]
+              },
+              {
+                "id": "transferMsg-expiry",
+                "description": "The transfer carries an expiry in the future",
+                "exec": [
+                  "const e = environment.transferMsg.body.GrpHdr.PmtInstrXpryDtTm",
+                  "expect(e).to.be.a('string')",
+                  "expect(new Date(e).getTime()).to.be.above(new Date(environment.transferMsg.body.GrpHdr.CreDtTm).getTime())"
+                ]
+              },
+              {
+                "id": "transferMsg-ilp-packet",
+                "description": "The transfer carries a well-formed ILPv4 Prepare packet with a 32-byte condition",
+                "exec": [
+                  "function parseIlp(p){",
+                  "  const b=Buffer.from(p.replace(/-/g,'+').replace(/_/g,'/'),'base64'); let o=0;",
+                  "  if(b[o++]!==12) throw new Error('not an ILPv4 Prepare packet (type '+b[o-1]+')');",
+                  "  const rl=(()=>{const f=b[o++]; if(f<128) return f; const n=f&127; let v=0; for(let i=0;i<n;i++) v=v*256+b[o++]; return v})();",
+                  "  const amount=b.readBigUInt64BE(o).toString(); o+=8;",
+                  "  const expiresAt=b.slice(o,o+17).toString('ascii'); o+=17;",
+                  "  const condition=b.slice(o,o+32).toString('base64').replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,''); o+=32;",
+                  "  const vs=()=>{const f=b[o++]; let n=f; if(f>=128){const k=f&127; n=0; for(let i=0;i<k;i++) n=n*256+b[o++]}; const s=b.slice(o,o+n); o+=n; return s};",
+                  "  const destination=vs().toString('ascii'); const data=vs();",
+                  "  return {amount,expiresAt,condition,destination,data};",
+                  "}",
+                  "const p = parseIlp(environment.transferMsg.body.CdtTrfTxInf.VrfctnOfTerms.IlpV4PrepPacket)",
+                  "expect(p.condition).to.have.lengthOf(43)"
+                ]
+              },
+              {
+                "id": "transferMsg-agents",
+                "description": "The payer and payee DFSPs are named",
+                "exec": [
+                  "const c = environment.transferMsg.body.CdtTrfTxInf",
+                  "expect([].concat(c.DbtrAgt.FinInstnId.Othr)[0].Id).to.equal('{$inputs.DFSP_ID}')",
+                  "expect([].concat(c.CdtrAgt.FinInstnId.Othr)[0].Id).to.equal('{$inputs.TTK_FSP_ID}')"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "DI-OUT-02",
+      "name": "DI-OUT-02 A failed lookup stops the payment",
+      "meta": {
+        "info": "Start a payment to the unknown identifier when this case runs"
+      },
+      "requests": [
+        {
+          "id": "Wait-for-lookup",
+          "description": "Wait for a lookup of an unknown identifier",
+          "apiVersion": {
+            "minorVersion": 0,
+            "majorVersion": 2,
+            "type": "iso20022",
+            "asynchronous": true
+          },
+          "url": "{$inputs.TTK_SELF_URL}",
+          "operationPath": "/parties/{Type}/{ID}",
+          "method": "get",
+          "headers": {
+            "Accept": "application/vnd.interoperability.iso20022.parties+json;version=2.0",
+            "Content-Type": "application/vnd.interoperability.iso20022.parties+json;version=2.0",
+            "Date": "{$function.generic.curDate}",
+            "FSPIOP-Source": "{$inputs.TTK_FSP_ID}",
+            "FSPIOP-Destination": "{$inputs.TTK_FSP_ID}"
+          },
+          "params": {
+            "Type": "{$inputs.LOOKUP_ID_TYPE}",
+            "ID": "ttk-wait"
+          },
+          "ignoreCallbacks": true,
+          "scriptingEngine": "javascript",
+          "scripts": {
+            "preRequest": {
+              "exec": [
+                "await inboundEvent.addListener('lookup', 'get', '/parties/{$inputs.LOOKUP_ID_TYPE}/{$inputs.UNKNOWN_ID}/{$inputs.TTK_FSP_ID}', null, {$inputs.OUT_WAIT_MS})"
+              ]
+            },
+            "postRequest": {
+              "exec": [
+                "environment.lookupMsg = await inboundEvent.getMessage('lookup', {$inputs.OUT_WAIT_MS})",
+                "const cert = `{$inputs.DFSP_JWS_PUBLIC_KEY}`",
+                "const lc = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [k.toLowerCase(), v]))",
+                "environment.lookupMsgJws = undefined; environment.lookupMsgJwsHeaders = undefined",
+                "if (environment.lookupMsg && cert.indexOf('BEGIN') >= 0) { environment.lookupMsgJws = custom.jws.validateCallback(lc(environment.lookupMsg.headers), environment.lookupMsg.body, cert); environment.lookupMsgJwsHeaders = custom.jws.validateCallbackProtectedHeaders(lc(environment.lookupMsg.headers)) }"
+              ]
+            }
+          },
+          "tests": {
+            "assertions": [
+              {
+                "id": "lookupMsg-received",
+                "description": "The DFSP's lookup arrived",
+                "exec": [
+                  "expect(environment.lookupMsg).to.be.an('object')"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "Check-no-quote",
+          "description": "Check that the DFSP sends no quote after the failed lookup",
+          "apiVersion": {
+            "minorVersion": 0,
+            "majorVersion": 2,
+            "type": "iso20022",
+            "asynchronous": true
+          },
+          "url": "{$inputs.TTK_SELF_URL}",
+          "operationPath": "/parties/{Type}/{ID}",
+          "method": "get",
+          "headers": {
+            "Accept": "application/vnd.interoperability.iso20022.parties+json;version=2.0",
+            "Content-Type": "application/vnd.interoperability.iso20022.parties+json;version=2.0",
+            "Date": "{$function.generic.curDate}",
+            "FSPIOP-Source": "{$inputs.TTK_FSP_ID}",
+            "FSPIOP-Destination": "{$inputs.TTK_FSP_ID}"
+          },
+          "params": {
+            "Type": "{$inputs.LOOKUP_ID_TYPE}",
+            "ID": "ttk-wait"
+          },
+          "ignoreCallbacks": true,
+          "scriptingEngine": "javascript",
+          "scripts": {
+            "preRequest": {
+              "exec": [
+                "await inboundEvent.addListener('noquote', 'post', '/quotes', null, {$inputs.OUT_QUIET_MS})"
+              ]
+            },
+            "postRequest": {
+              "exec": [
+                "environment.noQuote = await inboundEvent.getMessage('noquote', {$inputs.OUT_QUIET_MS})"
+              ]
+            }
+          },
+          "tests": {
+            "assertions": [
+              {
+                "id": "no-quote",
+                "description": "No quote request arrives within the quiet period",
+                "exec": [
+                  "expect(environment.noQuote).to.equal(null)"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

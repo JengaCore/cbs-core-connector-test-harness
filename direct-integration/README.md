@@ -14,6 +14,8 @@ The hub's API is ISO 20022 for party lookup, quotes and transfers. Other resourc
 | [hub-requests.md](hub-requests.md) | What to ask the hub operator for, and what the hub operator does |
 | [register.md](register.md) | The test cases, how each is checked, and the behaviour it covers |
 | [evidence/evidence-pack.md](evidence/evidence-pack.md) | The template for recording a run |
+| [onboarding-checks](onboarding-checks) | A script that checks onboarding by reading MCM |
+| [ttk](ttk) | Testing Toolkit collections, rules and a self-test |
 | [tools/generate_field_reference.py](tools/generate_field_reference.py) | Regenerates `field-reference.md` |
 
 ## Using these resources
@@ -21,9 +23,10 @@ The hub's API is ISO 20022 for party lookup, quotes and transfers. Other resourc
 1. Send the first table in [hub-requests.md](hub-requests.md) to the hub operator.
 2. Implement onboarding as described in [onboarding.md](onboarding.md), and check each step.
 3. Implement the message handling in [clearing-behaviour.md](clearing-behaviour.md). Use the API viewer links in it to see real payloads, and [field-reference.md](field-reference.md) for every element.
-4. When the hub operator confirms the participant is ready, run the cases in [register.md](register.md) against the test environment.
-5. Record each result, with the evidence the register names, in the evidence pack.
-6. Repeat on production after the test environment passes.
+4. Run [onboarding-checks/check-onboarding.sh](onboarding-checks/check-onboarding.sh) and keep its output.
+5. When the hub operator confirms the participant is ready, run the cases in [register.md](register.md) against the test environment. The hub operator runs the Testing Toolkit cases in [ttk](ttk).
+6. Record each result, with the evidence the register names, in the evidence pack.
+7. Repeat on production after the test environment passes.
 
 ## Regenerating the field reference
 
@@ -43,7 +46,13 @@ Run it from `direct-integration`. `<commit>` is the commit of the API definition
 
 ## Status
 
-The documents above are complete. The Testing Toolkit collections and the onboarding check scripts that the register refers to are not yet in this folder. Until they are, the hub operator carries out those checks by following the behaviour documents.
+The documents, the onboarding check script and the Testing Toolkit collections are complete. They have been tested as follows:
+
+- The onboarding script passes every check against a mock MCM and fails correctly on faulty data.
+- The Testing Toolkit collections pass against a Toolkit that plays the DFSP (`ttk/selftest/run.sh`).
+- Neither has been run against a real hub or a real DFSP. The first run may need small adjustments to the environment values and rules.
+
+Register rows whose method is Evidence are not automated. [register.md](register.md) says why for each.
 
 ## Sources
 
