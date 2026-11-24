@@ -27,11 +27,11 @@ The column "Docs site case" gives the related case in the Payment Manager test r
 | DI-ONB-02 | DFSP CA registered | `GET /dfsps/{id}/ca` returns the root, `validationState` is `VALID` | Script | [§5 step 2](onboarding.md#step-2-dfsp-ca) |
 | DI-ONB-03 | Server certificate registered | `GET /dfsps/{id}/servercerts` is `VALID`, issued by the DFSP CA, and names the callback host | Script | [§5 step 3](onboarding.md#step-3-server-certificate) |
 | DI-ONB-04 | JWS key registered | The DFSP's public key appears in `GET /dfsps/jwscerts` | Script | [§5 step 4](onboarding.md#step-4-jws-public-key) |
-| DI-ONB-05 | Callback URL registered | The ingress endpoint URL is present for the DFSP | Script | [§5 step 5](onboarding.md#step-5-callback-url) |
+| DI-ONB-05 | Callback URL and egress addresses registered | The ingress endpoint URL is present for the DFSP, and the egress list holds at least one address | Script | [§5 step 5](onboarding.md#step-5-callback-url-and-egress-addresses) |
 | DI-ONB-06 | Hub request signed by the DFSP CA | The outbound enrollment is `CERT_SIGNED`, its validations pass, and its issuer is the DFSP CA | Script | [§5 step 6](onboarding.md#step-6-sign-the-hubs-request) |
 | DI-ONB-07 | DFSP request accepted | The inbound enrollment exists and is not `INVALID`: RSA key of the required length, valid signature | Script | [§5 steps 7 to 9](onboarding.md#step-7-to-9-your-client-certificate) |
 | DI-ONB-08 | DFSP certificate signed | The inbound enrollment is `CERT_SIGNED` and carries the certificate | Script | [§5 steps 7 to 9](onboarding.md#step-7-to-9-your-client-certificate) |
-| DI-ONB-09 | Trust material held | The DFSP shows the hub CA fingerprint it holds equals `GET /hub/ca`, and it holds the participants' JWS keys | Evidence | [§5 step 10](onboarding.md#step-10-trust-material) |
+| DI-ONB-09 | Trust material held | The DFSP shows the hub CA fingerprint it holds equals `GET /hub/ca`, and it holds the participants' JWS keys and the hub's own (the entry `Hub` in `GET /dfsps/jwscerts`). The script confirms both are available in MCM | Evidence | [§5 step 10](onboarding.md#step-10-trust-material) |
 | DI-ONB-10 | Participant ready | The hub confirms the callbacks, the participant's activation and the sub id | Hub check | [onboarding §6](onboarding.md#6-after-the-hub-signs) |
 | DI-ONB-11 | Renewal rehearsed | A new client certificate request is sent, signed by the hub and installed with no payment lost. Done on the test environment | Evidence | [onboarding §7](onboarding.md#7-renewal-and-rotation) |
 

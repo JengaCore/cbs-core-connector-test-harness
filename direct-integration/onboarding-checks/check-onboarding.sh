@@ -17,6 +17,7 @@
 #   CLIENT_CERT         Your client certificate (PEM) issued by the hub
 #   CLIENT_KEY          Its private key (PEM)
 #   MIN_KEY_BITS        Minimum RSA key length for the JWS key (default 2048)
+#   HUB_ID              The id of the hub's entry in GET /dfsps/jwscerts (default Hub)
 #
 # Exit status: 0 when no check failed, 1 when a check failed, 2 when the settings are incomplete.
 set -u
@@ -40,6 +41,7 @@ done
 MCM_URL="${MCM_URL%/}"
 CALLBACK_PORT="${CALLBACK_PORT:-443}"
 MIN_KEY_BITS="${MIN_KEY_BITS:-2048}"
+HUB_ID="${HUB_ID:-Hub}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 chmod 700 "$WORK"
@@ -148,17 +150,19 @@ else
   fail DI-ONB-04 "no JWS public key registered"
 fi
 
-# ---- DI-ONB-05: callback URL -----------------------------------------------------------
+# ---- DI-ONB-05: callback URL and egress addresses ----------------------------------------
 EP_JSON="$(api "/dfsps/$DFSP_ID/endpoints" | as_list)"
 URLS="$(printf '%s' "$EP_JSON" | jq -r '.[] | select((.type // "" | ascii_upcase) == "URL" and (.direction // "" | ascii_upcase) == "INGRESS") | .value.url' 2>/dev/null)"
-if [ -n "$URLS" ]; then
-  if [ -n "${CALLBACK_HOST:-}" ] && ! printf '%s\n' "$URLS" | grep -q "$CALLBACK_HOST"; then
-    fail DI-ONB-05 "an ingress URL is registered but none names $CALLBACK_HOST"
-  else
-    pass DI-ONB-05 "ingress URL registered: $(printf '%s\n' "$URLS" | head -1)"
-  fi
-else
+EG_JSON="$(api "/dfsps/$DFSP_ID/endpoints/egress")"
+n_egress="$(printf '%s' "$EG_JSON" | jq '[.ipList[]? | select(.address)] | length' 2>/dev/null)"
+if [ -z "$URLS" ]; then
   fail DI-ONB-05 "no ingress URL registered"
+elif [ -n "${CALLBACK_HOST:-}" ] && ! printf '%s\n' "$URLS" | grep -q "$CALLBACK_HOST"; then
+  fail DI-ONB-05 "an ingress URL is registered but none names $CALLBACK_HOST"
+elif [ "${n_egress:-0}" -lt 1 ]; then
+  fail DI-ONB-05 "ingress URL registered, but no egress address (the hub's onboarding needs at least one)"
+else
+  pass DI-ONB-05 "ingress URL registered: $(printf '%s\n' "$URLS" | head -1). $n_egress egress address(es) registered"
 fi
 
 # ---- DI-ONB-06: the hub's client certificate, signed by the DFSP CA ---------------------
@@ -200,14 +204,17 @@ else
   fi
 fi
 
-# ---- DI-ONB-09: hub CA ------------------------------------------------------------------
+# ---- DI-ONB-09: hub CA and the hub's JWS key ---------------------------------------------
 HUB_JSON="$(api "/hub/ca")"
 printf '%s' "$HUB_JSON" | jq -r '.rootCertificate // empty' >"$WORK/hub-ca.pem" 2>/dev/null
-if [ -s "$WORK/hub-ca.pem" ]; then
+hub_key="$(printf '%s' "$ALL_JWS" | jq -r --arg h "$HUB_ID" '[.[] | select(.dfspId == $h)] | length' 2>/dev/null)"
+if [ -s "$WORK/hub-ca.pem" ] && [ "${hub_key:-0}" -ge 1 ]; then
   fp="$(openssl x509 -in "$WORK/hub-ca.pem" -noout -fingerprint -sha256 2>/dev/null | sed 's/.*=//')"
-  pass DI-ONB-09 "hub CA available. SHA-256 fingerprint: $fp (compare with the CA your system trusts)"
-else
+  pass DI-ONB-09 "hub CA available (SHA-256 fingerprint $fp: compare with the CA your system trusts), and the hub's JWS key is listed as $HUB_ID"
+elif [ ! -s "$WORK/hub-ca.pem" ]; then
   fail DI-ONB-09 "GET /hub/ca returned no root certificate"
+else
+  fail DI-ONB-09 "the hub's JWS key is not in GET /dfsps/jwscerts (no entry named $HUB_ID). Ask the hub operator"
 fi
 
 # ---- DI-SEC-02 and DI-SEC-03: the callback host -------------------------------------------

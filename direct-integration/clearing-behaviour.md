@@ -8,6 +8,8 @@ Onboarding (certificates, keys, MCM) is in [onboarding.md](onboarding.md).
 
 In scope: person-to-person (P2P) and person-to-business (P2B) payments over the hub's ISO 20022 API. Out of scope: FX, request to pay, bulk transfers and third-party initiation.
 
+These documents apply when the hub environment's API type is `iso20022`. The hub operator states it on the [hand-over sheet](hub-requests.md#1-what-the-hub-operator-sends) (item 7). When it is `fspiop`, the messages are the classic FSPIOP ones and these documents do not describe them.
+
 The hub's API is a merge of two definitions. Party lookup, quotes and transfers use ISO 20022 message structures. Every other resource keeps its FSPIOP format. This document covers the ISO resources.
 
 The hub runs Mojaloop chart 17.2.0. The images that implement these behaviours are:
@@ -88,7 +90,7 @@ Each message below links to the API viewer, where its real payload can be seen, 
 
 `{Type}` is the identifier type (for example `MSISDN`, `ACCOUNT_ID`) and `{ID}` its value.
 
-The hub uses a static oracle: customers are not registered in an account lookup. The sender names the destination DFSP in `{SubId}`, and the hub routes the lookup to that DFSP. The documented rule is that the sub id is the destination DFSP's id. A payer must therefore use the `…/{SubId}` form. Ask the hub operator which identifier types are enabled and which sub id value routes to your DFSP. The hub maps the sub id to a DFSP with an oracle rule that the hub operator adds.
+The hub uses a static oracle: customers are not registered in an account lookup. The sender names the destination DFSP in `{SubId}`, and the hub routes the lookup to that DFSP. A payer must therefore use the `…/{SubId}` form. The hub operator chooses the sub ids: each one is a key in the static oracle's rules, for an identifier type, and it maps to a DFSP id. The docs site convention is to use the DFSP id as the sub id, but the hub operator may have set something else. The hub operator sends the identifier types enabled and the sub id for your DFSP on the [hand-over sheet](hub-requests.md#1-what-the-hub-operator-sends) (item 8). Until the rule for your DFSP exists, lookups for it return an empty answer.
 
 ### 4.2 Response
 
@@ -208,7 +210,7 @@ To sign:
 3. The signing input is `BASE64URL(protected header) + "." + BASE64URL(payload)`. Sign it with your RSA key (2048 bits or more).
 4. Set the `FSPIOP-Signature` header to the JSON object `{"signature": "<BASE64URL signature>", "protectedHeader": "<BASE64URL protected header>"}`.
 
-To validate: parse the header, decode the protected header, check `alg`, and check that `FSPIOP-URI`, `FSPIOP-HTTP-Method`, `FSPIOP-Source` and, if present, `FSPIOP-Destination` and `Date` equal the real request values. Then verify the signature with the sender's public key from MCM (`GET /dfsps/jwscerts`), looked up by `FSPIOP-Source`.
+To validate: parse the header, decode the protected header, check `alg`, and check that `FSPIOP-URI`, `FSPIOP-HTTP-Method`, `FSPIOP-Source` and, if present, `FSPIOP-Destination` and `Date` equal the real request values. Then verify the signature with the sender's public key from MCM (`GET /dfsps/jwscerts`), looked up by `FSPIOP-Source`. The hub's own key is in that list as the entry `Hub`, and the hub's messages carry `FSPIOP-Source: Hub`.
 
 **Canonical body.** The reference library signs, and re-serialises when validating, the body in stable key order with no whitespace (`safe-stable-stringify`). A peer or the hub that uses the library recomputes the payload that way. Sign the same canonical serialisation you send, so that validation does not depend on how each side formats the JSON.
 
@@ -362,8 +364,7 @@ These could not be settled from the source and must be confirmed before go-live:
 
 - Which of `COMM` or `RESV` the hub prefers for the fulfil.
 - How the ISO quote expresses whether the amount is a send amount or a receive amount.
-- Which identifier types are enabled and how they route to your DFSP.
-- The versions of the hub services that are running.
+- The versions of the hub services that are running (hand-over sheet, item 9).
 
 ## 13. Sources
 
