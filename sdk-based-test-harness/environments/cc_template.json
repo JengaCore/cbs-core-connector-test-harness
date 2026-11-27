@@ -1,0 +1,39 @@
+{
+  "inputValues": {
+    "cc_outgoing_url": "http://core-connector1:3004",
+    "cc_incoming_url": "http://core-connector1:3003",
+    "connectorHost": "core-connector1",
+    "subId": "dfsp2",
+    "payerFspId": "bluebank",
+    "payeeId": "260970000000",
+    "payeeTimeout": "260970000000",
+    "payeeAborted": "260970000000",
+    "payeeIdToRegister": "260970000000",
+    "invalidCurrency": "XXX",
+    "sendAmount": "1000",
+    "merchantAmount": "100",
+    "payeeAmount": "400",
+    "sendMoneyPurposeCode": "P2P",
+    "desc": "School Fees",
+    "payerName": "Joshua Karame",
+    "payerDOB": "2001-01-01",
+    "payerPrvncOB": "Lusaka Province",
+    "payerCityOB": "Lusaka",
+    "payerCtryOB": "ZM",
+
+    "payeeFspId": "<the DFSP's own id on the switch>",
+    "payeeIdType": "<supported identifier type, e.g. MSISDN>",
+    "invalidIdType": "EMAIL",
+    "sendCurrency": "GMD",
+    "receiveCurrency": "GMD",
+    "incomingCurrency": "GMD",
+    "payerId": "<outbound test account number>",
+    "payeeIdToSend": "<inbound test account number>",
+    "payeeIdNotFound": "<identifier that matches no account>"
+  },
+  "options": {
+    "breakOnError": false,
+    "transformerName": "none",
+    "generateIDType": "ulid"
+  }
+}

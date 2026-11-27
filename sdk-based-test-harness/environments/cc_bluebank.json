@@ -1,0 +1,38 @@
+{
+  "inputValues": {
+    "payerFspId": "bluebank",
+    "payerId": "971938765",
+    "payeeFspId": "bluebank",
+    "payeeId": "260970000000",
+    "sendCurrency": "ZMW",
+    "receiveCurrency": "ZMW",
+    "desc": "School Fees",
+    "payeeIdType": "MSISDN",
+    "sendAmount": "1000",
+    "payerName": "Joshua Karame",
+    "payerDOB": "2001-01-01",
+    "payerPrvncOB": "Lusaka Province",
+    "payerCityOB": "Lusaka",
+    "payerCtryOB": "GM",
+    "merchantAmount": "100",
+    "sendMoneyPurposeCode": "P2P",
+    "payeeAmount": "400",
+    "payeeIdNotFound": "46733123450",
+    "invalidIdType": "EMAIL",
+    "connectorHost": "core-connector1",
+    "incomingCurrency": "ZMW",
+    "invalidCurrency": "XXX",
+    "cc_outgoing_url": "http://core-connector1:3004",
+    "cc_incoming_url": "http://core-connector1:3003",
+    "payeeIdToRegister": "260970000000",
+    "payeeTimeout": "260970000000",
+    "payeeAborted": "260970000000",
+    "payeeIdToSend": "260970000000",
+    "subId": "dfsp2"
+  },
+  "options": {
+    "breakOnError": false,
+    "transformerName": "none",
+    "generateIDType": "ulid"
+  }
+}
