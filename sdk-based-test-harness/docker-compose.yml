@@ -193,12 +193,12 @@ services:
     profiles:
       - debug
 
-  dfsp-api:
-    extends:
-      file: core-connector.yaml
-      service: dfsp-api
-    networks:
-      - mojaloop-net
+  # dfsp-api:
+  #   extends:
+  #     file: core-connector.yaml
+  #     service: dfsp-api
+  #   networks:
+  #     - mojaloop-net
       
   core-connector1:
     extends:
